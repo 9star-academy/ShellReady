@@ -1,0 +1,10 @@
+# component	version	arch	url	sha256
+trzsz	1.2.0	x86_64	https://github.com/trzsz/trzsz-go/releases/download/v1.2.0/trzsz_1.2.0_linux_x86_64.tar.gz	70e3e0847177d4c7b681a8ec19fa00092e422a6c628ef9d8a5db6dfbf4612add
+trzsz	1.2.0	aarch64	https://github.com/trzsz/trzsz-go/releases/download/v1.2.0/trzsz_1.2.0_linux_aarch64.tar.gz	9a73c237b6b12af267e878591ff22a01c97ca9d1cd8125f9ff4ffd6df4fea97c
+starship	1.26.0	x86_64	https://github.com/starship/starship/releases/download/v1.26.0/starship-x86_64-unknown-linux-musl.tar.gz	b7c232b0e8249d8e55a40beb79c5c43a7d370f3f9408bd215deb0170daeaadf3
+starship	1.26.0	aarch64	https://github.com/starship/starship/releases/download/v1.26.0/starship-aarch64-unknown-linux-musl.tar.gz	dc30189378d2f2e287384e8a692d3f95ad1df64cf0e8c36aa9201516028aed6b
+atuin	18.22.0	x86_64	https://github.com/atuinsh/atuin/releases/download/v18.22.0/atuin-x86_64-unknown-linux-musl.tar.gz	b3c123df1887cf27c6480a87d148c86831cd83da478e0a8ab773ca188f3f3222
+atuin	18.22.0	aarch64	https://github.com/atuinsh/atuin/releases/download/v18.22.0/atuin-aarch64-unknown-linux-musl.tar.gz	76d12818e3dff64ddac3b9f4ec63b305070ddcf5fc382a2a23dc0826fa9bf5a8
+zoxide	0.10.0	x86_64	https://github.com/ajeetdsouza/zoxide/releases/download/v0.10.0/zoxide-0.10.0-x86_64-unknown-linux-musl.tar.gz	2d93385b99f3e82cf2701609a1bffcad863fbeb75aa3fe7eb6be4d29be68b1ae
+zoxide	0.10.0	aarch64	https://github.com/ajeetdsouza/zoxide/releases/download/v0.10.0/zoxide-0.10.0-aarch64-unknown-linux-musl.tar.gz	f1f16c5d6298d63dee467eedea1cdcd8490e43e493bea43acd416dc9033ef641
+suggestions	0.7.1	any	https://raw.githubusercontent.com/zsh-users/zsh-autosuggestions/e52ee8ca55bcc56a17c828767a3f98f22a68d4eb/zsh-autosuggestions.zsh	eec7ba8f7a71414ace0ea0fab0908d005b24cf65d83b169c0ff97815d3cfc51a

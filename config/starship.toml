@@ -1,0 +1,22 @@
+# ASCII symbols work without installing fonts on the local terminal.
+add_newline = false
+format = "$username$hostname$directory$git_branch$git_status$cmd_duration$line_break$character"
+
+[username]
+show_always = true
+format = "[$user]($style)"
+
+[hostname]
+ssh_only = false
+format = "[@$hostname]($style) "
+
+[directory]
+truncation_length = 3
+truncation_symbol = ".../"
+
+[git_branch]
+symbol = "git:"
+
+[character]
+success_symbol = "[>](bold green)"
+error_symbol = "[>](bold red)"

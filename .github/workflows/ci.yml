@@ -1,0 +1,28 @@
+name: ShellReady checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y shellcheck zsh
+      - run: bash tests/check.sh
+      - run: python3 -m unittest discover -s tests -v
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['ubuntu:22.04', 'ubuntu:24.04', 'debian:12', 'debian:13']
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Isolated installation, repeat and uninstall
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: docker run --rm -v "$PWD:/src:ro" "$IMAGE" bash /src/tests/container-smoke.sh

@@ -1,0 +1,9 @@
+# Local history only. ShellReady never registers or logs in to a sync service.
+auto_sync = false
+update_check = false
+search_mode = "fuzzy"
+filter_mode = "host"
+style = "compact"
+inline_height = 12
+show_preview = true
+secrets_filter = true
