@@ -4,13 +4,13 @@
 
 一条命令配好 Linux 服务器，集成 BBR、trzsz-go、Starship、zsh-autosuggestions、Atuin 和 zoxide，让每次 SSH 登录都更顺手。
 
-> 当前为首版实现，尚未发布正式版本。已提供本地安装入口、状态检查、卸载和可选 BBRv3 内核升级；Linux 整机安装、SSH 传输与内核启动仍需验收。测试记录见 [验证说明](docs/verification.md)。
+> 当前为首版实现，尚未发布正式版本。已提供远程一键入口、本地安装、状态检查、卸载和可选 BBRv3 内核升级；Linux 整机安装、SSH 传输与内核启动仍需验收。测试记录见 [验证说明](docs/verification.md)。
 
 ## 一条命令安装
 
 登录目标 Linux 服务器后，在 Bash 或 Zsh 中执行（需要已安装 curl）：
 
-> 启用条件：将代码推送到公开的 `9star-academy/ShellReady` 仓库的 `main` 分支。2026-09-20 检查时，下面的公开地址返回 HTTP 404，暂未验证线上启动成功；仅在本地提交不会让 GitHub 下载地址生效。
+> 公开下载入口已通过 `--help` 启动验证，完整 Linux 安装仍需按验证说明验收。
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/main/bootstrap.sh)
@@ -96,9 +96,9 @@ shellready uninstall
 
 也可以在完整仓库目录执行 `bash install.sh status`、`bash install.sh update`、`bash install.sh uninstall`。
 
-- `status`：显示工具版本、Shell 接入段、当前 BBR 和项目内核状态。交互和网络体验仍需实际验证。
+- `status`：显示工具版本、核验 Shell 接入段内容、当前 BBR 和项目内核状态。交互和网络体验仍需实际验证。
 - `update`：按当前安装器携带的固定清单重新安装或补齐配置，不自动拉取上游 latest。升级清单需使用新版仓库或引导入口。
-- `uninstall`：移除本项目工具与 `.zshrc` 接入段；若登录 Shell 仍是项目设置的 `/bin/zsh`，恢复原 Shell。保留历史数据、备份、系统依赖及内核。
+- `uninstall`：移除本项目工具与 `.zshrc` 接入段；若登录 Shell 仍是项目设置的 `/bin/zsh` 或等价路径 `/usr/bin/zsh`，恢复原 Shell。保留历史数据、备份、系统依赖及内核。
 
 BBR 是全机设置，普通卸载保留它。需要恢复本项目安装前的 TCP 算法时，显式执行：
 
@@ -116,13 +116,15 @@ shellready uninstall --restore-bbr
 
 检测并按需加载 `tcp_bbr`，启用已有能力，写入独立 sysctl 配置。不支持时明确跳过，不阻断其他工具；不更换内核，也不替换现有网卡 qdisc 或附加激进网络参数。
 
+已有 sysctl 配置可能覆盖本项目设置时，会提示冲突文件并跳过，保留原配置。解决冲突后重跑即可。
+
 算法名为 `bbr` 本身不能证明是 v3，BBR 的实际收益取决于链路。
 
 ### 可选：安装指定 BBRv3 内核
 
 独立入口使用 [byJoey/Actions-bbr-v3 Releases](https://github.com/byJoey/Actions-bbr-v3/releases) 的**标准版**内核，要求明确指定 release tag。先检查系统、架构、容器环境、GRUB、当前内核回退文件、磁盘空间和 UEFI Secure Boot 状态。
 
-当前允许 Ubuntu 24.04、Debian 12/13，要求 `update-grub`、`systemd-detect-virt`，以及 `/boot` 所在分区至少 1 GiB 可用空间。UEFI 环境还需 `mokutil`，且必须确认 Secure Boot 关闭。其他引导方式不自动处理。
+当前允许 Ubuntu 24.04、Debian 12/13，要求 `update-grub`、`grub-script-check`、`systemd-detect-virt`，当前内核和 initramfs 文件及匹配的 GRUB 启动项，以及 `/boot` 所在分区至少 1 GiB 可用空间。UEFI 环境还需 `mokutil`，且必须确认 Secure Boot 关闭。其他引导方式不自动处理。
 
 在 Releases 页面选择与服务器架构对应的标准 tag 后执行（占位符需要替换）：
 
@@ -132,7 +134,7 @@ shellready bbrv3 --tag '<标准版 release tag>' --yes
 
 该入口核验 GitHub API 提供的 SHA-256、内核包名、版本和架构，仅安装匹配的 `linux-image` 包，不安装 headers、libc-dev、Max 内核，不删除旧内核。上游产物结构不符合要求时会拒绝安装。
 
-成功后显示“已安装，待重启验证”，退出码为 `2`。重启指**重启整台服务器**，会断开 SSH 并暂时中断业务；何时重启由用户决定，脚本不自动执行。重启前确认云厂商控制台或救援入口可用。重新连接后执行 `shellready status`，检查运行内核、已加载模块版本和拥塞控制算法。
+成功后显示“已安装，待重启验证”，退出码为 `2`。重启指**重启整台服务器**，会断开 SSH 并暂时中断业务；何时重启由用户决定，脚本不自动执行。重启前确认云厂商控制台或救援入口可用。重新连接后执行 `shellready update`，为新内核启用 BBR，再执行 `shellready status` 检查运行内核、已加载模块版本和拥塞控制算法。如果内核包已装好但引导更新中断，先修复提示的引导问题，再重跑同一条 `bbrv3` 命令补完检查；未通过检查前不要重启。
 
 卸载由 ShellReady 记录的内核前，必须先启动其他可用内核：
 
@@ -146,7 +148,7 @@ shellready kernel-remove --tag '<已安装的标准版 release tag>' --yes
 
 服务器端提供 `trz` / `tsz`。本地需要支持 trzsz 的终端，或使用 `tssh`、`trzsz ssh` 连接；仅安装服务器工具不会自动给普通 SSH 增加上传交互。详见 [trzsz-go 使用说明](https://github.com/trzsz/trzsz-go#usage)。
 
-Atuin 使用本项目独立配置，默认关闭自动同步和更新检查，不自动注册、登录或上传历史。首次安装尝试导入目标用户已有的标准 Bash/Zsh 历史文件，成功后记录标记；当前仍在其他会话内、尚未写入历史文件的命令不会被导入。
+Atuin 使用本项目独立配置，默认关闭自动同步、更新检查和 AI 快捷键，不自动注册、登录或上传历史。首次安装尝试导入目标用户已有的标准 Bash/Zsh 历史文件，成功后记录标记；当前仍在其他会话内、尚未写入历史文件的命令不会被导入。
 
 ## 文件位置
 
@@ -170,7 +172,7 @@ python3 -m unittest discover -s tests -v
 bash tests/check.sh
 ```
 
-`tests/check.sh` 需要 Bash、Zsh 和 ShellCheck。`.github/workflows/ci.yml` 配置了两种架构、四个系统版本的容器安装测试；容器测试显式跳过 BBR，不代替真实内核、重启或 SSH 传输验证。
+本地检查需要 Bash、Zsh、Python 3、jq 和 ShellCheck。测试目录 `tests/` 必须随代码一起提交，CI 会直接执行其中的脚本。`.github/workflows/ci.yml` 配置了两种架构、四个系统版本的容器安装测试；容器测试显式跳过 BBR，不代替真实内核、重启或 SSH 传输验证。
 
 项目目标见 [agent.md](agent.md)，实现步骤见 [开发计划](docs/plans/2026-09-20-shellready-v0.1.md)，实际测试边界见 [验证记录](docs/verification.md)。
 

@@ -10,6 +10,20 @@ check_shell_block() {
       END { if (open) exit 1 }
     ' "$file" || { fail "ShellReady 接入段损坏，保留原文件：$file"; return 1; }
 }
+shell_block() {
+    cat <<'EOF'
+# >>> ShellReady >>>
+[[ -r "$HOME/.local/share/shellready/config/init.zsh" ]] && source "$HOME/.local/share/shellready/config/init.zsh"
+# <<< ShellReady <<<
+EOF
+}
+shell_block_is_current() {
+    local file=$1 current
+    check_shell_block "$file" || return 1
+    [[ -f "$file" ]] || return 1
+    current=$(awk '/^# >>> ShellReady >>>$/ {copy=1} copy {print} /^# <<< ShellReady <<<$/{copy=0}' "$file") || return 1
+    [[ "$current" == "$(shell_block)" ]]
+}
 remove_shell_block() {
     local file=$1
     check_shell_block "$file" || return 1
@@ -21,21 +35,31 @@ add_shell_block() {
     local file=$1
     check_shell_block "$file" || return 1
     as_user mkdir -p "$STATE/backups"
-    if [[ -f "$file" ]] && grep -q '^# >>> ShellReady >>>$' "$file"; then
+    if shell_block_is_current "$file"; then
         return 0
     fi
     if [[ -f "$file" ]]; then
         as_user cp -p "$file" "$STATE/backups/zshrc.$(date +%s).$$"
+        if grep -q '^# >>> ShellReady >>>$' "$file"; then
+            # Replace the managed block in place so later user overrides keep their order.
+            shell_block > "$WORK/shellready.block"
+            awk -v block_file="$WORK/shellready.block" '
+              /^# >>> ShellReady >>>$/ {
+                while ((getline line < block_file) > 0) print line
+                close(block_file); skip=1; next
+              }
+              /^# <<< ShellReady <<<$/{skip=0; next}
+              !skip {print}
+            ' "$file" > "$WORK/zshrc.new"
+            user_write "$file" "$WORK/zshrc.new"
+            return
+        fi
         cat "$file" > "$WORK/zshrc.new"
         printf '\n' >> "$WORK/zshrc.new"
     else
         : > "$WORK/zshrc.new"
     fi
-    cat >> "$WORK/zshrc.new" <<'EOF'
-# >>> ShellReady >>>
-[[ -r "$HOME/.local/share/shellready/config/init.zsh" ]] && source "$HOME/.local/share/shellready/config/init.zsh"
-# <<< ShellReady <<<
-EOF
+    shell_block >> "$WORK/zshrc.new"
     user_write "$file" "$WORK/zshrc.new"
 }
 
@@ -44,7 +68,9 @@ install_shell() {
     # Respect ZDOTDIR rather than silently updating a file Zsh will never load.
     # Expand HOME/ZDOTDIR inside the target user shell.
     # shellcheck disable=SC2016
-    resolved=$(as_user zsh -c 'print -r -- "${ZDOTDIR:-$HOME}"')
+    # Login profiles also affect SSH startup; use a separate descriptor for the
+    # result so profile banners cannot be mistaken for the directory.
+    resolved=$(as_user zsh -lc 'print -r -- "${ZDOTDIR:-$HOME}" >&3' 3>&1 1>&2)
     [[ "$resolved" == "$TARGET_HOME" ]] || { fail "检测到自定义 ZDOTDIR=${resolved}，首版不自动接入；已保留现有配置。"; return 1; }
     check_shell_block "$TARGET_HOME/.zshrc"
     user_write "$PREFIX/config/init.zsh" "$ROOT/config/init.zsh"
@@ -86,7 +112,7 @@ uninstall_shell() {
     if [[ -f "$STATE/original-shell" ]]; then
         original=$(cat "$STATE/original-shell")
         current=$(getent passwd "$TARGET_USER" | cut -d: -f7)
-        if [[ "$current" == /bin/zsh ]]; then
+        if [[ "$current" == /bin/zsh || "$current" == /usr/bin/zsh ]]; then
             if [[ "$original" != /* ]] || ! grep -qxF "$original" /etc/shells; then
                 fail '原登录 Shell 不再有效，请先手动恢复'; return 1
             fi

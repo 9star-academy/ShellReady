@@ -122,8 +122,8 @@ status_tools() {
     [[ "$missing" == 0 ]] || return 2
 }
 status_shell() {
-    if [[ ! -r "$TARGET_HOME/.zshrc" ]] || ! grep -q '^# >>> ShellReady >>>$' "$TARGET_HOME/.zshrc"; then
-        log 'Zsh 接入段不存在'; return 2
+    if ! shell_block_is_current "$TARGET_HOME/.zshrc"; then
+        log 'Zsh 接入段缺失或无效；运行 update 修复，标记损坏时需先手动整理。'; return 2
     fi
     [[ -f "$PREFIX/config/init.zsh" ]] || { log 'Shell 初始化文件不存在'; return 2; }
     log "Zsh 接入段存在；登录 Shell：${LOGIN_SHELL}。交互效果需重新连接验证。"

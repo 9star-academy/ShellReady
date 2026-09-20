@@ -17,7 +17,8 @@ fetch() {
     fi
 }
 fetch "https://api.github.com/repos/$REPO/commits/$REF" "$WORK/commit.json"
-COMMIT=$(sed -n 's/^[[:space:]]*"sha": "\([0-9a-f]\{40\}\)",.*/\1/p' "$WORK/commit.json" | head -n 1)
+# Consume all matches: head can close the pipe early and trigger pipefail/SIGPIPE.
+COMMIT=$(sed -n 's/^[[:space:]]*"sha": "\([0-9a-f]\{40\}\)",.*/\1/p' "$WORK/commit.json" | sed -n '1p')
 [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo '无法解析 commit（可能触发 GitHub API 限额）' >&2; exit 1; }
 fetch "https://codeload.github.com/$REPO/tar.gz/$COMMIT" "$WORK/source.tar.gz"
 mkdir "$WORK/source"

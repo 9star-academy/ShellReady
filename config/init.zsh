@@ -19,7 +19,7 @@ if [[ -x "$SHELLREADY_HOME/bin/zoxide" ]]; then
 fi
 if [[ -x "$SHELLREADY_HOME/bin/atuin" ]]; then
     export ATUIN_CONFIG_DIR="$SHELLREADY_HOME/config/atuin"
-    eval "$("$SHELLREADY_HOME/bin/atuin" init zsh --disable-up-arrow)"
+    eval "$("$SHELLREADY_HOME/bin/atuin" init zsh --disable-up-arrow --disable-ai)"
 fi
 if [[ -x "$SHELLREADY_HOME/bin/starship" ]]; then
     export STARSHIP_CONFIG="$SHELLREADY_HOME/config/starship.toml"

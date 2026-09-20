@@ -73,7 +73,7 @@ Zsh 是 zsh-autosuggestions 的依赖，应纳入依赖处理，不算额外的�
 
 以下为本次实现采用的范围，后续以实际测试结果维护，不表述为用户已经逐项确认的偏好。
 
-- 远程使用 `bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/main/bootstrap.sh)`；公开入口可访问后才能使用。bootstrap 下载同一 commit 的完整源码，再调用依赖本地模块的 install.sh。
+- 远程使用 `bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/main/bootstrap.sh)`；公开入口已通过 --help 启动验证。bootstrap 下载同一 commit 的完整源码，再调用依赖本地模块的 install.sh。
 - 默认一条命令直接安装全部，无交互菜单；支持 install、update、status、uninstall、bbrv3、kernel-remove。
 - 安装器允许 Ubuntu 22.04/24.04、Debian 12/13，x86_64/ARM64。尚待 CI 与实机验证。
 - 默认为目标用户设置 /bin/zsh，提供 --keep-shell；普通用户调用 sudo 后仍以原用户为目标。
@@ -83,8 +83,9 @@ Zsh 是 zsh-autosuggestions 的依赖，应纳入依赖处理，不算额外的�
 - 默认 BBR 不改现有 qdisc；不支持返回跳过，应用失败尝试恢复。
 - 可选内核来源为 byJoey/Actions-bbr-v3 标准 release；用户必须提供 tag 和 --yes，按 API SHA-256 校验 linux-image 包。只接受 Ubuntu 24.04、Debian 12/13 和可验证的 GRUB 回退环境。
 - 普通卸载保留全机 BBR；--restore-bbr 显式恢复，发生后续修改冲突则停止。独立 kernel-remove 拒绝移除正在运行的内核。
+- tests/ 必须纳入版本控制；忽略测试目录会让 CI 在调用脚本时失败。Atuin 初始化显式关闭 AI 快捷键，保持本机历史搜索的默认范围；不限制用户自行调用其他 Atuin 功能。
 - 当前电脑无 Docker/Linux VM，不得声称 Linux 安装、SSH 传输、内核启动/回退已验证。
-- 项目许可证仍待维护者确定；首版已由用户提交，公开下载入口暂返回 HTTP 404，推送及仓库可见性尚未确认。
+- 项目许可证仍待维护者确定；首版已由用户提交并公开推送，公开入口 --help 已验证；本次复查修复仍由用户自行提交，CI 和 Linux 完整验收不能提前算通过。
 
 不把这些未决项变成已确认承诺；也不让它们阻碍文档等独立工作。
 

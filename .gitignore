@@ -33,5 +33,3 @@ go.work.sum
 
 # Python test cache
 __pycache__/
-
-/tests
