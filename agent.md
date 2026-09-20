@@ -73,6 +73,7 @@ Zsh 是 zsh-autosuggestions 的依赖，应纳入依赖处理，不算额外的�
 
 以下为本次实现采用的范围，后续以实际测试结果维护，不表述为用户已经逐项确认的偏好。
 
+- 远程使用 `bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/main/bootstrap.sh)`；公开入口可访问后才能使用。bootstrap 下载同一 commit 的完整源码，再调用依赖本地模块的 install.sh。
 - 默认一条命令直接安装全部，无交互菜单；支持 install、update、status、uninstall、bbrv3、kernel-remove。
 - 安装器允许 Ubuntu 22.04/24.04、Debian 12/13，x86_64/ARM64。尚待 CI 与实机验证。
 - 默认为目标用户设置 /bin/zsh，提供 --keep-shell；普通用户调用 sudo 后仍以原用户为目标。
@@ -83,7 +84,7 @@ Zsh 是 zsh-autosuggestions 的依赖，应纳入依赖处理，不算额外的�
 - 可选内核来源为 byJoey/Actions-bbr-v3 标准 release；用户必须提供 tag 和 --yes，按 API SHA-256 校验 linux-image 包。只接受 Ubuntu 24.04、Debian 12/13 和可验证的 GRUB 回退环境。
 - 普通卸载保留全机 BBR；--restore-bbr 显式恢复，发生后续修改冲突则停止。独立 kernel-remove 拒绝移除正在运行的内核。
 - 当前电脑无 Docker/Linux VM，不得声称 Linux 安装、SSH 传输、内核启动/回退已验证。
-- 项目许可证仍待维护者确定；未提交、未推送、未发布。
+- 项目许可证仍待维护者确定；首版已由用户提交，公开下载入口暂返回 HTTP 404，推送及仓库可见性尚未确认。
 
 不把这些未决项变成已确认承诺；也不让它们阻碍文档等独立工作。
 

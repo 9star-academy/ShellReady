@@ -6,6 +6,30 @@
 
 > 当前为首版实现，尚未发布正式版本。已提供本地安装入口、状态检查、卸载和可选 BBRv3 内核升级；Linux 整机安装、SSH 传输与内核启动仍需验收。测试记录见 [验证说明](docs/verification.md)。
 
+## 一条命令安装
+
+登录目标 Linux 服务器后，在 Bash 或 Zsh 中执行（需要已安装 curl）：
+
+> 启用条件：将代码推送到公开的 `9star-academy/ShellReady` 仓库的 `main` 分支。2026-09-20 检查时，下面的公开地址返回 HTTP 404，暂未验证线上启动成功；仅在本地提交不会让 GitHub 下载地址生效。
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/main/bootstrap.sh)
+```
+
+入口会下载同一个 commit 的完整源码，再启动安装器，默认安装全部六个组件；不需要手动克隆仓库。这里使用 `bootstrap.sh`，因为 `install.sh` 需要仓库里的组件模块，不能单独下载执行。
+
+只查看帮助，不安装：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/main/bootstrap.sh) --help
+```
+
+普通用户运行时会按需调用 sudo，为原用户配置。以 root 为其他用户安装时，在命令末尾加上 `--user ubuntu`（替换为实际用户名）。也可以追加 `--keep-shell` 或 `--skip-bbr`。
+
+安装完成后重新连接 SSH，即可使用增强后的 Shell；默认无需重启服务器。后续通过 `shellready status` 查看状态。
+
+需要固定源码版本时，在命令前设置 `SHELLREADY_REF=<tag或commit>`；默认下载 main 当前指向的源码。下载失败时，引导脚本不会继续安装。
+
 ## 功能
 
 | 组件 | 安装内容 | 日常使用 |
@@ -59,12 +83,6 @@ bash install.sh --help
 ```
 
 安装后重新连接 SSH。使用 `--keep-shell` 时，手动运行 `zsh` 后才会加载这些增强功能。默认 BBR 操作不要求重启整台服务器。
-
-### 远程一条命令入口
-
-仓库包含 `bootstrap.sh`：先解析一个仓库 commit，再下载该 commit 的完整源码，避免入口和模块版本不一致。下载失败时不会继续执行。
-
-**当前工作区代码尚未推送，不能直接使用 GitHub 下载入口。**发布并验证后，可将 `bootstrap.sh` 下载到服务器再用 Bash 执行；通过 `SHELLREADY_REF` 指定 tag 或 commit，默认使用 main。本地维护命令不依赖重新下载入口。
 
 ## 状态、修复与卸载
 

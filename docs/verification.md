@@ -36,13 +36,13 @@ trzsz-go x86_64、Starship ARM64、Atuin x86_64 的本次额外下载核验因�
 
 当前开发环境是 macOS，无 Docker 或 Linux VM：
 
-- GitHub Actions 尚未触发（未提交、推送或发布）。
+- 首版已由用户提交；GitHub Actions 运行情况尚未核实。
 - 两种架构、四种 Linux 版本的真实 apt 安装与卸载尚未执行。
 - 真实 root / sudo 用户环境的完整文件权限与登录 Shell 切换尚未验证。
 - 真实 SSH 重连、trz/tsz 上传下载尚未验证。
 - 默认 BBR 的真实系统写入与服务器重启后的持久性尚未验证。
 - BBRv3 内核包安装、GRUB 启动、Secure Boot 检测与旧内核回退尚未验证。
-- bootstrap.sh 的线上入口尚未发布，未做远程一键安装验收。
+- 2026-09-20 检查公开 bootstrap.sh 地址和仓库 API 均返回 HTTP 404，无法确定是尚未公开还是地址不可用；未做远程一键安装验收。
 
 ## 可复现本地检查
 
