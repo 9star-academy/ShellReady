@@ -30,7 +30,7 @@ check_platform() {
     # shellcheck disable=SC1091
     source /etc/os-release
     case "$ID:${VERSION_ID:-}" in
-        ubuntu:22.04|ubuntu:24.04|debian:12|debian:13) ;;
+        ubuntu:22.04|ubuntu:24.04|ubuntu:26.04|debian:12|debian:13) ;;
         *) fail "首版不支持：${PRETTY_NAME:-$ID}"; return 1 ;;
     esac
     # ARCH is consumed by the tool and kernel modules.

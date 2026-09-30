@@ -51,7 +51,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/mai
 
 | 项目 | 要求 |
 | --- | --- |
-| 系统 | Ubuntu 22.04 / 24.04，Debian 12 / 13 |
+| 系统 | Ubuntu 22.04 / 24.04 / 26.04，Debian 12 / 13 |
 | 架构 | x86_64 / ARM64（aarch64） |
 | 权限 | 安装和卸载需要 root 或 sudo；status 可由目标用户只读执行 |
 | 网络 | 可访问发行版 apt 源、GitHub 及其下载域名 |
@@ -59,6 +59,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/mai
 | 容器 | 可用 `--skip-bbr` 测试工具；容器不支持本项目的内核升级 |
 
 脚本使用独立目录保存工具，不替换系统中已有的同名程序。进入配置后的 Zsh 时，ShellReady 的工具目录优先于原 PATH。
+
+Ubuntu 26.04 支持普通工具安装及当前内核 BBR 检测/配置；可选 BBRv3 更换内核仍仅允许下文列出的系统。CI 容器矩阵包含 Ubuntu 26.04 的 x86_64 / ARM64 安装、重复安装和卸载检查；容器测试跳过 BBR，真实 SSH 交互与宿主内核 BBR 仍需在服务器验证。
 
 ## 本地安装
 
