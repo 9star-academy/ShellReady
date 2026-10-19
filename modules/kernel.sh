@@ -2,6 +2,18 @@
 KERNEL_STATE=/var/lib/shellready/kernels
 KERNEL_BOOT_DIR=/boot
 
+show_bbrv3_hint() {
+    printf '\n'
+    log '可选升级：BBRv3（默认安装不更换内核，当前 BBR 结果见上方）'
+    log '潜在收益：改善拥塞时的丢包、排队延迟和与其他 TCP 连接共享带宽的表现；实际收益取决于链路，不保证提速。'
+    log '当前网络表现正常时，可继续使用现有版本。'
+    log '升级要求 Ubuntu 24.04+、Debian 12+，安装第三方标准版内核，并需自行安排重启整台服务器；脚本不自动重启。'
+    log '重新连接 SSH 后，如决定升级，请先选择当前架构的标准版 release tag，再单独执行：'
+    log "shellready bbrv3 --tag '<标准版 release tag>' --yes"
+    log '版本与升级说明：https://github.com/9star-academy/ShellReady#bbr-与可选-bbrv3'
+    log '内核发行包：https://github.com/byJoey/Actions-bbr-v3/releases'
+}
+
 # Require the initramfs and a matching GRUB entry as well as the kernel image.
 # This checks on-disk recovery evidence; only a real boot can validate hardware support.
 verify_kernel_files() {
@@ -61,7 +73,7 @@ kernel_preflight() {
     validate_kernel_tag
     # shellcheck disable=SC1091
     source /etc/os-release
-    case "$ID:${VERSION_ID:-}" in ubuntu:24.04|debian:12|debian:13) ;; *) fail '可选内核仅允许 Ubuntu 24.04、Debian 12/13'; return 1 ;; esac
+    supported_release || { fail '可选内核要求 Ubuntu 24.04+、Debian 12+，且系统版本必须可识别'; return 1; }
     command -v systemd-detect-virt >/dev/null 2>&1 || { fail '缺少 systemd-detect-virt，无法验证是否为独立内核环境'; return 1; }
     if systemd-detect-virt --container --quiet; then
         fail '容器共享宿主内核，不允许在容器安装内核'; return 1

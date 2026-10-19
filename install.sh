@@ -32,6 +32,7 @@ ShellReady — 新服务器，一键配顺手
   --help              显示帮助
 
 退出码：0 成功；1 失败；2 部分跳过/尚未就绪。
+默认仅启用当前内核 BBR；可选 BBRv3 需安装后另行执行，要求 Ubuntu 24.04+、Debian 12+。
 内核升级会影响整台服务器；重启与真实 SSH/传输验证由用户执行。
 EOF
 }
@@ -175,6 +176,9 @@ case "$ACTION" in
 esac
 printf '\n'
 if ((${#RESULTS[@]})); then printf '%s\n' "${RESULTS[@]}"; fi
+if [[ "$ACTION" == install && "$FAILED" == 0 && "$SKIP_BBR" == 0 ]]; then
+    show_bbrv3_hint
+fi
 if ((FAILED)); then log "存在 $FAILED 项失败，修复原因后重跑。"; exit 1; fi
 if ((SKIPPED)); then log "存在 $SKIPPED 项跳过或待验证，未标记为全部完成。"; exit 2; fi
 log '操作完成。'

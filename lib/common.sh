@@ -25,14 +25,27 @@ resolve_user() {
     STATE="$TARGET_HOME/.local/state/shellready"
 }
 
+version_at_least() {
+    [[ "$1" =~ ^[0-9]+(\.[0-9]+)*$ ]] || return 1
+    [[ $(printf '%s\n' "$2" "$1" | LC_ALL=C sort -V | sed -n '1p') == "$2" ]]
+}
+
+supported_release() {
+    case "$ID" in
+        ubuntu) version_at_least "${VERSION_ID:-}" 24.04 ;;
+        debian) version_at_least "${VERSION_ID:-}" 12 ;;
+        *) return 1 ;;
+    esac
+}
+
 check_platform() {
     [[ $(uname -s) == Linux ]] || { fail '安装目标必须是 Linux；--help 可在本机查看。'; return 1; }
     # shellcheck disable=SC1091
     source /etc/os-release
-    case "$ID:${VERSION_ID:-}" in
-        ubuntu:22.04|ubuntu:24.04|ubuntu:26.04|debian:12|debian:13) ;;
-        *) fail "首版不支持：${PRETTY_NAME:-$ID}"; return 1 ;;
-    esac
+    # Keep Ubuntu 22.04 for tools/current-kernel BBR, outside optional upgrades.
+    if [[ "$ID:${VERSION_ID:-}" != ubuntu:22.04 ]] && ! supported_release; then
+        fail "不支持：${PRETTY_NAME:-$ID}；要求 Ubuntu 22.04 或 Ubuntu 24.04+、Debian 12+"; return 1
+    fi
     # ARCH is consumed by the tool and kernel modules.
     # shellcheck disable=SC2034
     case "$(uname -m)" in

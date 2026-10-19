@@ -33,6 +33,7 @@ Zsh 是 zsh-autosuggestions 的依赖，应纳入依赖处理，不算额外的�
 采用方案 1：默认启用现有 BBR，提供独立的可选 BBRv3 内核升级入口。
 
 - 默认一键流程安装其余五个工具，并检测、启用当前内核支持的 BBR；不更换内核，不因 BBR 默认配置要求重启服务器。
+- 默认安装结束后展示非交互的 BBRv3 潜在收益、升级代价和独立命令提示。用户先完成基础安装，再主动选择升级；不承诺提速，不将跳过/失败表述为 BBR 已启用。`--skip-bbr`、有失败项及 `update` 不展示首次安装提示。
 - 当前内核不支持 BBR 时，明确报告跳过及原因，继续安装其余工具，不自动转入内核升级，也不报告全部成功。
 - BBRv3 内核升级仅在用户主动选择后执行，先检查系统、架构和引导兼容性，保留可用旧内核供回退。
 - 升级成功后标记“已安装，待重启验证”；重启是重启整台服务器，不是重新连接 SSH，必须由用户决定，不自动执行。
@@ -75,13 +76,13 @@ Zsh 是 zsh-autosuggestions 的依赖，应纳入依赖处理，不算额外的�
 
 - 远程使用 `bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/main/bootstrap.sh)`；公开入口已通过 --help 启动验证。bootstrap 下载同一 commit 的完整源码，再调用依赖本地模块的 install.sh。
 - 默认一条命令直接安装全部，无交互菜单；支持 install、update、status、uninstall、bbrv3、kernel-remove。
-- 安装器允许 Ubuntu 22.04/24.04、Debian 12/13，x86_64/ARM64。尚待 CI 与实机验证。
+- 基础安装允许 Ubuntu 22.04 或 Ubuntu 24.04 及以上、Debian 12 及以上，x86_64/ARM64。按可识别的数字 VERSION_ID 比较，不自动推断衍生系统或无版本号的 testing/unstable。较新版本通过入口检查不等于完成实机验证。
 - 默认为目标用户设置 /bin/zsh，提供 --keep-shell；普通用户调用 sudo 后仍以原用户为目标。
 - 配置使用标准 HOME/.zshrc；符号链接配置或自定义 ZDOTDIR 不自动修改。保留现有配置和主题文件。
 - 工具装入目标用户 ~/.local/share/shellready，提供本地 shellready 管理命令；固定清单见 config/assets.tsv。
 - update 按当前清单修复或安装；不会自动拉取上游 latest，变更清单需使用新版仓库。
 - 默认 BBR 不改现有 qdisc；不支持返回跳过，应用失败尝试恢复。
-- 可选内核来源为 byJoey/Actions-bbr-v3 标准 release；用户必须提供 tag 和 --yes，按 API SHA-256 校验 linux-image 包。只接受 Ubuntu 24.04、Debian 12/13 和可验证的 GRUB 回退环境。
+- 可选内核来源为 byJoey/Actions-bbr-v3 标准 release；用户必须提供 tag 和 --yes，按 API SHA-256 校验 linux-image 包，不执行上游远程安装脚本。最低系统版本为 Ubuntu 24.04+、Debian 12+（包括 Ubuntu 26.04），仍要求可验证的 GRUB 回退环境。
 - 普通卸载保留全机 BBR；--restore-bbr 显式恢复，发生后续修改冲突则停止。独立 kernel-remove 拒绝移除正在运行的内核。
 - tests/ 必须纳入版本控制；忽略测试目录会让 CI 在调用脚本时失败。Atuin 初始化显式关闭 AI 快捷键，保持本机历史搜索的默认范围；不限制用户自行调用其他 Atuin 功能。
 - 当前电脑无 Docker/Linux VM，不得声称 Linux 安装、SSH 传输、内核启动/回退已验证。

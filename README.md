@@ -28,6 +28,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/mai
 
 安装完成后重新连接 SSH，即可使用增强后的 Shell；默认无需重启服务器。后续通过 `shellready status` 查看状态。
 
+默认安装只启用当前内核已有的 BBR。结束时会说明可选 BBRv3 的潜在收益与升级代价；需要升级的用户再单独执行命令，不会在一键安装中弹出选择菜单或自动更换内核。详见 [BBR 与可选 BBRv3](#bbr-与可选-bbrv3)。
+
 需要固定源码版本时，在命令前设置 `SHELLREADY_REF=<tag或commit>`；默认下载 main 当前指向的源码。下载失败时，引导脚本不会继续安装。
 
 ## 功能
@@ -51,7 +53,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/mai
 
 | 项目 | 要求 |
 | --- | --- |
-| 系统 | Ubuntu 22.04 / 24.04 / 26.04，Debian 12 / 13 |
+| 系统 | Ubuntu 22.04 或 Ubuntu 24.04 及以上，Debian 12 及以上；可选内核升级不含 Ubuntu 22.04 |
 | 架构 | x86_64 / ARM64（aarch64） |
 | 权限 | 安装和卸载需要 root 或 sudo；status 可由目标用户只读执行 |
 | 网络 | 可访问发行版 apt 源、GitHub 及其下载域名 |
@@ -60,7 +62,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/mai
 
 脚本使用独立目录保存工具，不替换系统中已有的同名程序。进入配置后的 Zsh 时，ShellReady 的工具目录优先于原 PATH。
 
-Ubuntu 26.04 支持普通工具安装及当前内核 BBR 检测/配置；可选 BBRv3 更换内核仍仅允许下文列出的系统。CI 容器矩阵包含 Ubuntu 26.04 的 x86_64 / ARM64 安装、重复安装和卸载检查；容器测试跳过 BBR，真实 SSH 交互与宿主内核 BBR 仍需在服务器验证。
+系统版本按 `/etc/os-release` 中的 `ID` 和数字 `VERSION_ID` 判断，不自动推断衍生发行版或缺少数字版本号的 testing/unstable 系统。较新版本通过最低版本检查不代表已完成实机验收。Ubuntu 26.04 可使用基础安装，也可主动选择 BBRv3 升级；内核升级还需满足下文的引导与回退条件。CI 容器矩阵覆盖 Ubuntu 22.04/24.04/26.04、Debian 12/13 的 x86_64 / ARM64 安装、重复安装和卸载检查；容器测试跳过 BBR，真实 SSH 交互与宿主内核 BBR 仍需在服务器验证。
 
 ## 本地安装
 
@@ -122,21 +124,52 @@ shellready uninstall --restore-bbr
 
 算法名为 `bbr` 本身不能证明是 v3，BBR 的实际收益取决于链路。
 
+### 是否需要升级 BBRv3
+
+BBRv3 是 TCP 拥塞控制算法的版本，和 `uname -r` 显示的 Linux 内核版本不是同一个版本号。默认安装不会把当前 BBR 自动升级成 v3。
+
+相比 BBRv1，BBRv3 的主要改进方向如下，效果需在实际业务链路验证：
+
+| 方面 | 潜在收益 |
+| --- | --- |
+| 丢包与重传 | 更完善地利用丢包等拥塞信号调整发送量，减少拥塞造成的丢包与重传 |
+| 延迟 | 改善排队控制和部分短请求延迟 |
+| 带宽共享 | 改善与 CUBIC、Reno 等 TCP 连接共享瓶颈带宽的表现 |
+
+这些收益不等于必然提速。Google 公布的部分部署结果中，BBRv3 的吞吐量与 v1 接近，改进主要体现在丢包、延迟和带宽共享。[Google BBRv3 技术报告](https://datatracker.ietf.org/meeting/119/materials/slides-119-ccwg-bbrv3-overview-and-google-deployment-00)
+
+网站、API、日常 SSH 等业务当前表现正常时，可继续使用现有内核 BBR。大文件分发、跨地区 TCP 传输或转发遇到吞吐不稳定、重传较多时，可先在具备回退条件的测试机上比较 v3。应在同一客户端、同一线路、相近时段对比吞吐、重传和传输时的延迟；升级不能突破云服务器购买的带宽上限。
+
+安装提示为非交互说明，不改变成功/失败/跳过结果；当前内核不支持 BBR 时仍明确报告跳过，不会自动安装新内核。使用 `--skip-bbr`、安装存在失败项或执行 `update` 时，不展示首次安装的升级提示。
+
 ### 可选：安装指定 BBRv3 内核
 
-独立入口使用 [byJoey/Actions-bbr-v3 Releases](https://github.com/byJoey/Actions-bbr-v3/releases) 的**标准版**内核，要求明确指定 release tag。先检查系统、架构、容器环境、GRUB、当前内核回退文件、磁盘空间和 UEFI Secure Boot 状态。
+采用“先完成基础安装，再主动升级”的流程。独立入口使用 [byJoey/Actions-bbr-v3 Releases](https://github.com/byJoey/Actions-bbr-v3/releases) 的**标准版**内核包，要求明确指定 release tag。ShellReady 自行校验和安装发行包，不直接执行上游远程 `install.sh`，不附带其 Max 模式或其他网络调优。先检查系统、架构、容器环境、GRUB、当前内核回退文件、磁盘空间和 UEFI Secure Boot 状态。
 
-当前允许 Ubuntu 24.04、Debian 12/13，要求 `update-grub`、`grub-script-check`、`systemd-detect-virt`，当前内核和 initramfs 文件及匹配的 GRUB 启动项，以及 `/boot` 所在分区至少 1 GiB 可用空间。UEFI 环境还需 `mokutil`，且必须确认 Secure Boot 关闭。其他引导方式不自动处理。
+系统最低要求为 **Ubuntu 24.04 及以上、Debian 12 及以上**，包括 Ubuntu 26.04。要求 `update-grub`、`grub-script-check`、`systemd-detect-virt`，当前内核和 initramfs 文件及匹配的 GRUB 启动项，以及 `/boot` 所在分区至少 1 GiB 可用空间。UEFI 环境还需 `mokutil`，且必须确认 Secure Boot 关闭。其他引导方式不自动处理。
 
-在 Releases 页面选择与服务器架构对应的标准 tag 后执行（占位符需要替换）：
+基础安装完成并重新连接 SSH 后，在 Releases 页面选择与服务器架构对应的标准 tag：x86_64 使用 `x86_64-X.Y.Z`，ARM64 使用 `arm64-X.Y.Z`，不带 `-max`。然后执行（占位符需要替换，不接受 `latest`）：
 
 ```bash
 shellready bbrv3 --tag '<标准版 release tag>' --yes
 ```
 
+本地仓库也可执行 `bash install.sh bbrv3 --tag '<标准版 release tag>' --yes`。`--tag` 与 `--yes` 缺一不可，默认 `install` / `update` 不会进入此流程。
+
 该入口核验 GitHub API 提供的 SHA-256、内核包名、版本和架构，仅安装匹配的 `linux-image` 包，不安装 headers、libc-dev、Max 内核，不删除旧内核。上游产物结构不符合要求时会拒绝安装。
 
 成功后显示“已安装，待重启验证”，退出码为 `2`。重启指**重启整台服务器**，会断开 SSH 并暂时中断业务；何时重启由用户决定，脚本不自动执行。重启前确认云厂商控制台或救援入口可用。重新连接后执行 `shellready update`，为新内核启用 BBR，再执行 `shellready status` 检查运行内核、已加载模块版本和拥塞控制算法。如果内核包已装好但引导更新中断，先修复提示的引导问题，再重跑同一条 `bbrv3` 命令补完检查；未通过检查前不要重启。
+
+重启后可手动复核：
+
+```bash
+uname -r
+cat /sys/module/tcp_bbr/version
+sysctl net.ipv4.tcp_congestion_control
+ss -tin
+```
+
+预期运行内核与选定 tag 对应，已加载模块版本为 `3`，默认算法为 `bbr`；在 TCP 传输时，对应连接详情应显示 `bbr`。仅有发行包安装成功或算法名 `bbr` 不足以证明已运行 v3。切换第三方内核后，需关注其安全更新，以及系统更新后实际启动的内核。
 
 卸载由 ShellReady 记录的内核前，必须先启动其他可用内核：
 
@@ -174,7 +207,7 @@ python3 -m unittest discover -s tests -v
 bash tests/check.sh
 ```
 
-本地检查需要 Bash、Zsh、Python 3、jq 和 ShellCheck。测试目录 `tests/` 必须随代码一起提交，CI 会直接执行其中的脚本。`.github/workflows/ci.yml` 配置了两种架构、四个系统版本的容器安装测试；容器测试显式跳过 BBR，不代替真实内核、重启或 SSH 传输验证。
+本地检查需要 Bash、Zsh、Python 3、jq 和 ShellCheck。测试目录 `tests/` 必须随代码一起提交，CI 会直接执行其中的脚本。`.github/workflows/ci.yml` 配置了两种架构、五个系统版本的容器安装测试；容器测试显式跳过 BBR，不代替真实内核、重启或 SSH 传输验证。
 
 项目目标见 [agent.md](agent.md)，实现步骤见 [开发计划](docs/plans/2026-09-20-shellready-v0.1.md)，实际测试边界见 [验证记录](docs/verification.md)。
 
