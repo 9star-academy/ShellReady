@@ -21,31 +21,36 @@ install_tool() {
     done
     if [[ "$ready" == 0 ]]; then
         archive="$WORK/$tool.download"
-        download "$url" "$archive"
-        verify_sha256 "$archive" "$hash"
-        mkdir -p "$WORK/$tool"
+        download "$url" "$archive" || return 1
+        verify_sha256 "$archive" "$hash" || return 1
+        mkdir -p "$WORK/$tool" || return 1
         if [[ "$tool" == suggestions ]]; then
-            cp "$archive" "$WORK/$tool/zsh-autosuggestions.zsh"
+            cp "$archive" "$WORK/$tool/zsh-autosuggestions.zsh" || return 1
         else
-            tar -xzf "$archive" --no-same-owner --no-same-permissions -C "$WORK/$tool"
+            tar -xzf "$archive" --no-same-owner --no-same-permissions -C "$WORK/$tool" || return 1
         fi
-        as_user mkdir -p "$dest"
+        as_user mkdir -p "$dest" || return 1
         for binary in "${bins[@]}"; do
             path=$(find "$WORK/$tool" -type f -name "$binary")
             [[ -n "$path" && "$path" != *$'\n'* ]] || { fail "产物中未找到唯一的 $binary"; return 1; }
-            user_write "$dest/$binary" "$path"
-            as_user chmod 755 "$dest/$binary"
+            user_write "$dest/$binary" "$path" || return 1
+            as_user chmod 755 "$dest/$binary" || return 1
             if [[ "$tool" != suggestions ]]; then
-                as_user "$dest/$binary" --version
+                as_user "$dest/$binary" --version || return 1
             fi
         done
         printf '%s\n' "$hash" > "$WORK/receipt"
-        user_write "$dest/.complete" "$WORK/receipt"
+        user_write "$dest/.complete" "$WORK/receipt" || return 1
+    fi
+    # trzsz has no Zsh initializer; keeping its links absent is its off switch.
+    if [[ "$tool" == trzsz && -e "$PREFIX/config/disabled/trzsz" ]]; then
+        log "$tool $version 已就绪；保留停用状态。"
+        return 0
     fi
     for binary in "${bins[@]}"; do
         [[ -f "$dest/$binary" ]] || { fail "$binary 缺失"; return 1; }
         [[ ! -d "$PREFIX/bin/$binary" || -L "$PREFIX/bin/$binary" ]] || { fail "工具入口被目录占用：$binary"; return 1; }
-        as_user ln -sfn "$dest/$binary" "$PREFIX/bin/$binary"
+        as_user ln -sfn "$dest/$binary" "$PREFIX/bin/$binary" || return 1
     done
     log "$tool $version 已就绪"
 }
@@ -57,17 +62,18 @@ install_zoxide() { install_tool zoxide; }
 
 install_manager() {
     local rel dir
-    for rel in install.sh lib/common.sh modules/tools.sh modules/shell.sh modules/bbr.sh modules/kernel.sh \
+    for rel in install.sh lib/common.sh modules/tools.sh modules/shell.sh modules/bbr.sh modules/kernel.sh modules/components.sh modules/menu.sh modules/qdisc.sh \
         config/assets.tsv config/init.zsh config/starship.toml config/atuin/config.toml; do
         dir=$(dirname "$rel")
-        as_user mkdir -p "$PREFIX/app/$dir"
-        user_write "$PREFIX/app/$rel" "$ROOT/$rel"
+        as_user mkdir -p "$PREFIX/app/$dir" || return 1
+        user_write "$PREFIX/app/$rel" "$ROOT/$rel" || return 1
     done
     cat > "$WORK/manager" <<'EOF'
 #!/usr/bin/env bash
 directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+if (($# == 0)); then set -- menu; fi
 exec bash "$directory/../app/install.sh" "$@"
 EOF
-    user_write "$PREFIX/bin/shellready" "$WORK/manager"
-    as_user chmod 755 "$PREFIX/bin/shellready"
+    user_write "$PREFIX/bin/shellready" "$WORK/manager" || return 1
+    as_user chmod 755 "$PREFIX/bin/shellready" || return 1
 }

@@ -75,7 +75,11 @@ Zsh 是 zsh-autosuggestions 的依赖，应纳入依赖处理，不算额外的�
 以下为本次实现采用的范围，后续以实际测试结果维护，不表述为用户已经逐项确认的偏好。
 
 - 远程使用 `bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/main/bootstrap.sh)`；公开入口已通过 --help 启动验证。bootstrap 下载同一 commit 的完整源码，再调用依赖本地模块的 install.sh。
-- 默认一条命令直接安装全部，无交互菜单；支持 install、update、status、uninstall、bbrv3、kernel-remove。
+- 默认一条命令仍直接安装全部；显式 `menu` 打开总菜单，已安装的 `shellready` 无参数打开总菜单。保留 install、update、status、uninstall、bbrv3、kernel-remove 等非交互命令。
+- 用户于 2026-10-20 确认新增总菜单和 BBR 子菜单。五个终端工具支持单项安装/修复、启用、停用和卸载；Zsh 仍为共享依赖。单项卸载保留历史和配置，repair 只修复已有组件，update 保留全量行为。
+- 菜单只读阶段不提权、不持有变更锁；具体操作通过独立 CLI 分派，失败可返回，取消和 EOF 不安装。
+- 用户选定 B2 焦糖暖夜风格：总菜单与 BBR 子菜单共享暖黄标题/分隔线、奶油白选中行和真实状态列。TTY 支持方向键、数字和 Enter，默认选中返回/退出；管道、NO_COLOR、dumb 和小窗口保留数字读入。颜色逐行复位，不修改终端主题；不改变原默认一键安装、变更锁或确认规则。
+- BBR 子菜单包含实际队列检查、独立启用、可选 FQ、标准版内核选择、网络恢复和非运行内核移除。FQ 仅主动确认后执行，保留 mq 根结构，未知/自定义队列保留并跳过；不加入区域、智能或极限调优。
 - 基础安装允许 Ubuntu 22.04 或 Ubuntu 24.04 及以上、Debian 12 及以上，x86_64/ARM64。按可识别的数字 VERSION_ID 比较，不自动推断衍生系统或无版本号的 testing/unstable。较新版本通过入口检查不等于完成实机验证。
 - 默认为目标用户设置 /bin/zsh，提供 --keep-shell；普通用户调用 sudo 后仍以原用户为目标。
 - 配置使用标准 HOME/.zshrc；符号链接配置或自定义 ZDOTDIR 不自动修改。保留现有配置和主题文件。

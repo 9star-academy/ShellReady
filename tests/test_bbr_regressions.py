@@ -102,5 +102,15 @@ run_step status status_bbr
 ''')
 
 
+    def test_dangling_configuration_symlink_is_preserved(self):
+        self.success(r'''
+mkdir -p "$WORK/foreign"
+ln -s "$WORK/foreign/bbr.conf" "$SYSCTL_FILE"
+run_step bbr install_bbr
+[[ "$FAILED" == 1 && -L "$SYSCTL_FILE" && ! -e "$WORK/foreign/bbr.conf" ]] || exit 99
+[[ ! -e "$BBR_STATE/original" && ! -e "$WORK/writes" ]] || exit 99
+''')
+
+
 if __name__ == '__main__':
     unittest.main()

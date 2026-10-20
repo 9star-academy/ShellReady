@@ -11,17 +11,17 @@ SAVEHIST=50000
 setopt APPEND_HISTORY INC_APPEND_HISTORY HIST_IGNORE_DUPS HIST_IGNORE_SPACE
 autoload -Uz compinit
 compinit
-if [[ -r "$SHELLREADY_HOME/bin/zsh-autosuggestions.zsh" ]]; then
+if [[ ! -e "$SHELLREADY_HOME/config/disabled/suggestions" && -r "$SHELLREADY_HOME/bin/zsh-autosuggestions.zsh" ]]; then
     source "$SHELLREADY_HOME/bin/zsh-autosuggestions.zsh"
 fi
-if [[ -x "$SHELLREADY_HOME/bin/zoxide" ]]; then
+if [[ ! -e "$SHELLREADY_HOME/config/disabled/zoxide" && -x "$SHELLREADY_HOME/bin/zoxide" ]]; then
     eval "$("$SHELLREADY_HOME/bin/zoxide" init zsh)"
 fi
-if [[ -x "$SHELLREADY_HOME/bin/atuin" ]]; then
+if [[ ! -e "$SHELLREADY_HOME/config/disabled/atuin" && -x "$SHELLREADY_HOME/bin/atuin" ]]; then
     export ATUIN_CONFIG_DIR="$SHELLREADY_HOME/config/atuin"
     eval "$("$SHELLREADY_HOME/bin/atuin" init zsh --disable-up-arrow --disable-ai)"
 fi
-if [[ -x "$SHELLREADY_HOME/bin/starship" ]]; then
+if [[ ! -e "$SHELLREADY_HOME/config/disabled/starship" && -x "$SHELLREADY_HOME/bin/starship" ]]; then
     export STARSHIP_CONFIG="$SHELLREADY_HOME/config/starship.toml"
     eval "$("$SHELLREADY_HOME/bin/starship" init zsh)"
 fi

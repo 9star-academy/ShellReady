@@ -23,7 +23,7 @@ class InstallGuidanceTests(unittest.TestCase):
         # Only privilege elevation and the host lock location are substituted;
         # real argument parsing, install ordering, BBR, summary and exit codes run.
         entry.write_text(entry.read_text().replace(
-            'if [[ "$ACTION" != status && $EUID != 0 ]]; then', 'if false; then'
+            'if [[ "$READ_ONLY" == 0 && $EUID != 0 ]]; then', 'if false; then'
         ).replace('/run/shellready', str(self.work / 'lock')))
         (self.work / 'algo').write_text('cubic')
         (self.work / 'bin').mkdir()

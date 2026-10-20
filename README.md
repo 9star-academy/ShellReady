@@ -4,7 +4,7 @@
 
 一条命令配好 Linux 服务器，集成 BBR、trzsz-go、Starship、zsh-autosuggestions、Atuin 和 zoxide，让每次 SSH 登录都更顺手。
 
-> 当前为首版实现，尚未发布正式版本。已提供远程一键入口、本地安装、状态检查、卸载和可选 BBRv3 内核升级；Linux 整机安装、SSH 传输与内核启动仍需验收。测试记录见 [验证说明](docs/verification.md)。
+> 当前为首版实现，尚未发布正式版本。已提供远程一键入口、本地安装、六项功能总菜单、BBR 子菜单、单项工具管理、状态检查、卸载和可选 BBRv3 内核升级；Linux 整机安装、SSH 传输与内核启动仍需验收。测试记录见 [验证说明](docs/verification.md)。
 
 ## 一条命令安装
 
@@ -31,6 +31,62 @@ bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/mai
 默认安装只启用当前内核已有的 BBR。结束时会说明可选 BBRv3 的潜在收益与升级代价；需要升级的用户再单独执行命令，不会在一键安装中弹出选择菜单或自动更换内核。详见 [BBR 与可选 BBRv3](#bbr-与可选-bbrv3)。
 
 需要固定源码版本时，在命令前设置 `SHELLREADY_REF=<tag或commit>`；默认下载 main 当前指向的源码。下载失败时，引导脚本不会继续安装。
+
+## 菜单安装与管理
+
+原来的一键安装命令保持不变：无参数直接安装全部六项。总菜单是额外入口，可以全部安装，也可以只安装需要的功能。
+
+使用包含菜单功能的完整源码，在仓库目录执行：
+
+```bash
+bash install.sh menu
+```
+
+新版源码发布后，远程入口也可以追加 `menu`：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/main/bootstrap.sh) menu
+```
+
+安装后重新连接 SSH，输入 `shellready` 或 `shellready menu` 打开总菜单。已有旧版安装时，用新版完整源码运行 `bash install.sh repair` 更新本地管理入口；它只修复已有组件，不补装已卸载的工具。`shellready install` 继续直接全量安装。
+
+```text
+ShellReady 管理菜单
+1. 一键安装全部功能
+2. BBR 网络管理
+3. 文件上传下载（trzsz-go）
+4. 终端提示符（Starship）
+5. 命令输入建议（zsh-autosuggestions）
+6. 历史命令搜索（Atuin）
+7. 常用目录跳转（zoxide）
+8. 查看全部功能状态
+9. 修复已安装功能
+10. 卸载 ShellReady
+0. 退出
+```
+
+总菜单和 BBR 子菜单采用 B2 焦糖暖夜风格：暖黄标题与分隔线、奶油白选中行、独立状态列。交互终端可输入数字或用 `↑/↓` 移动，按 Enter 执行；默认选中 `0`，直接 Enter 返回或退出，Esc 也可返回。数字输入时高亮即时更新，输入 `10` 后按 Enter 才进入卸载确认，不会在输入 `1` 时提前安装。方向键移动后再输入数字会重新选择，退格可修改输入；不支持的组合按键不会混入选项。过长输入只缩短显示，仍按完整输入判断，不截取为有效编号执行。
+
+菜单按终端能力使用真彩色、256 色或普通 ANSI 近似色，颜色只作用于菜单区域，不更改终端主题设置。管道输出、`TERM=dumb` 或 `NO_COLOR=1 shellready` 使用无颜色数字菜单；窗口小于 64 列或 24 行时保留数字输入，避免方向键重绘错位。
+
+窗口缩小时仍可退格修改已经输入的数字，仅更新输入行；放大后恢复方向键高亮。菜单返回、退出、EOF、Ctrl+C 或 SIGTERM 会恢复进入读键前的终端输入模式，具体安装/卸载操作继续使用原有独立命令和确认规则。
+
+状态列读取实际安装收据、工具入口和停用标记，区分已启用、已停用、未安装和待修复；“已启用”表示安装与启停记录正常，Shell 加载仍需重新连接 SSH 验证。BBR 概览读取当前 TCP 算法、默认队列、运行内核及已加载模块版本；算法名 `bbr` 不等同于 BBRv3，默认队列也不等同于实际出口队列，详细核验仍选择“查看状态”。浏览和移动选中行不执行工具、不更改网络配置。
+
+五个终端工具分别提供安装/修复、启用、停用和卸载。单项安装会准备共享的 Zsh 环境，但不安装其他工具或修改 BBR；可传 `--keep-shell` 保持登录 Shell。停用保留工具和数据，单项卸载保留配置、Atuin/zoxide 历史、其他组件与管理入口。重新连接 SSH 后验证终端变化。trzsz 停用仅移除本项目的 `trz`/`tsz` 入口，不移除系统中原有的同名工具。
+
+也可直接管理单项（内部名称为 `trzsz`、`starship`、`suggestions`、`atuin`、`zoxide`）：
+
+```bash
+shellready component atuin install
+shellready component atuin status
+shellready component atuin disable
+shellready component atuin enable
+shellready component atuin remove
+shellready repair
+```
+
+停用标记在重装、修复和全量 `update` 后保留；重新安装已停用的工具后，如需启用，单独选择“启用”。`update` 仍按当前固定清单补齐全部工具，菜单中的“修复已安装功能”只处理已有组件。已有 FQ 管理记录会在全部状态检查和修复后一起检查，未完成时会报告待验证；修复不会自动重设出口队列，需从 BBR 子菜单主动处理。菜单读取本身不提权、不占安装锁、不安装依赖；执行具体变更时才按需调用 sudo。取消、输入结束或退出不会触发默认安装；操作失败会显示结果并返回菜单。
 
 ## 功能
 
@@ -93,6 +149,7 @@ bash install.sh --help
 安装并进入配置后的 Zsh 后，可使用本地命令：
 
 ```bash
+shellready                 # 总菜单
 shellready status
 shellready update
 shellready uninstall
@@ -141,6 +198,35 @@ BBRv3 是 TCP 拥塞控制算法的版本，和 `uname -r` 显示的 Linux 内�
 网站、API、日常 SSH 等业务当前表现正常时，可继续使用现有内核 BBR。大文件分发、跨地区 TCP 传输或转发遇到吞吐不稳定、重传较多时，可先在具备回退条件的测试机上比较 v3。应在同一客户端、同一线路、相近时段对比吞吐、重传和传输时的延迟；升级不能突破云服务器购买的带宽上限。
 
 安装提示为非交互说明，不改变成功/失败/跳过结果；当前内核不支持 BBR 时仍明确报告跳过，不会自动安装新内核。使用 `--skip-bbr`、安装存在失败项或执行 `update` 时，不展示首次安装的升级提示。
+
+### BBR 子菜单与可选 FQ
+
+总菜单选择“BBR 网络管理”，或执行 `shellready bbr-menu`：
+
+```text
+1. 查看 BBR、内核和实际网卡队列
+2. 启用当前内核 BBR
+3. 启用 BBR + FQ（修改出口队列）
+4. 选择标准版 BBRv3 内核安装
+5. 恢复 ShellReady 修改的网络配置
+6. 移除已记录的非运行 BBRv3 内核
+0. 返回总菜单
+```
+
+默认全量安装仍只启用现有内核 BBR，保留原队列。FQ 必须主动选择并确认，需要系统提供 `ip`、`tc`（iproute2）和 `jq`；缺少时会提示，不在浏览菜单时安装系统包。独立命令如下：
+
+```bash
+shellready bbr-status
+shellready bbr-enable
+shellready bbr-fq --yes
+shellready bbr-restore --yes
+```
+
+FQ 操作会改变默认路由出口的实际队列，可能短暂影响正在传输的数据。只处理可识别的系统默认 `fq`、`fq_codel` 或默认参数的 `pfifo_fast` 队列；`mq` 保留为根队列，仅替换其支持的子队列。遇到自定义 handle、限速/整形、过滤规则、`noqueue` 或未知配置时整项跳过，不替换现有规则。运行前记录原默认值和队列参数，失败时尝试恢复，无法恢复时保留记录并明确报错。后续被其他操作修改的配置或队列不会强行覆盖。
+
+默认队列写入独立 sysctl 文件；这不等于所有网卡重启后一定使用 FQ，需重新运行 `bbr-status` 查看实际状态。恢复会处理本项目记录的队列与原 TCP 算法，不删除其他工具，不清空其他软件的网络配置，也不修改 TCP 缓冲区、带宽上限或附加区域调优。
+
+内核版本列表需要 `curl`、`jq`，按当前架构筛选最近 100 条发行记录中的标准正式版，过滤 Max/预发布/草稿；列表失败不会安装。选中版本后仍按下方流程核验，安装成功后需要自行安排服务器重启。
 
 ### 可选：安装指定 BBRv3 内核
 
@@ -195,7 +281,10 @@ Atuin 使用本项目独立配置，默认关闭自动同步、更新检查和 A
 | `~/.local/state/shellready/` | 原 Shell、导入标记和 `.zshrc` 备份，卸载保留 |
 | `~/.zshrc` | 追加可识别的 ShellReady 接入段，其他内容保留 |
 | `/etc/sysctl.d/90-shellready-bbr.conf` | 项目 BBR 持久配置 |
+| `~/.local/share/shellready/config/disabled/` | 各工具独立停用标记 |
 | `/var/lib/shellready/bbr/` | 全机 BBR 原状态与配置摘要 |
+| `/etc/sysctl.d/90-shellready-fq.conf` | 主动启用 FQ 后的默认队列配置 |
+| `/var/lib/shellready/qdisc/` | FQ 原状态、队列参数和恢复记录 |
 | `/var/lib/shellready/kernels/` | 可选内核安装与验证记录 |
 
 历史数据存放在各工具的数据目录中，不在 ShellReady 工具目录内；卸载不会删除它们。

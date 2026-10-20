@@ -5,16 +5,17 @@ BBR_SYSCTL_DIRS=(/etc/sysctl.d /run/sysctl.d /usr/local/lib/sysctl.d /usr/lib/sy
 BBR_SYSCTL_MAIN=/etc/sysctl.conf
 
 bbr_conflict_in_files() {
-    # Only the exact congestion-control key is relevant; leave all other tuning alone.
-    awk -F= '
+    # Match one exact managed key; the FQ module reuses this checker for default_qdisc.
+    awk -F= -v wanted="${BBR_SYSCTL_KEY:-net.ipv4.tcp_congestion_control}" -v expected="${BBR_SYSCTL_VALUE:-bbr}" '
         /^[[:space:]]*[#;]/ { next }
         NF >= 2 {
             key=$1; gsub(/[[:space:]]/, "", key); sub(/^-/, "", key)
-            if (key != "net.ipv4.tcp_congestion_control" && key != "net/ipv4/tcp_congestion_control") next
+            gsub(/\//, ".", key)
+            if (key != wanted) next
             value=$2; sub(/[[:space:]]*[#;].*$/, "", value); gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
             location=FILENAME ":" FNR
         }
-        END { if (location != "" && value != "bbr") print location " = " value }
+        END { if (location != "" && value != expected) print location " = " value }
     ' "$@"
 }
 
@@ -35,22 +36,22 @@ check_bbr_persistence() {
             for dir in "${BBR_SYSCTL_DIRS[@]}"; do
                 file="$dir/$name"
                 [[ -e "$file" || -L "$file" ]] || continue
-                [[ -r "$file" ]] || { fail "无法检查 BBR 持久配置：$file"; return 1; }
+                [[ -r "$file" ]] || { fail "无法检查网络持久配置：$file"; return 1; }
                 ordered+=("$file")
                 break
             done
         done < <(printf '%s\n' "${names[@]}" | LC_ALL=C sort -u)
         conflict=$(bbr_conflict_in_files "${ordered[@]}") || return 1
         if [[ -n "$conflict" ]]; then
-            log "后续 sysctl 配置会覆盖 BBR：$conflict；保留原配置，跳过。"; return 2
+            log "后续 sysctl 配置会覆盖项目网络设置：${conflict}；保留原配置，跳过。"; return 2
         fi
     fi
     # procps sysctl --system also reads /etc/sysctl.conf last.
     if [[ -e "$BBR_SYSCTL_MAIN" || -L "$BBR_SYSCTL_MAIN" ]]; then
-        [[ -r "$BBR_SYSCTL_MAIN" ]] || { fail "无法检查 BBR 持久配置：$BBR_SYSCTL_MAIN"; return 1; }
+        [[ -r "$BBR_SYSCTL_MAIN" ]] || { fail "无法检查网络持久配置：$BBR_SYSCTL_MAIN"; return 1; }
         conflict=$(bbr_conflict_in_files "$BBR_SYSCTL_MAIN") || return 1
         if [[ -n "$conflict" ]]; then
-            log "sysctl --system 会覆盖 BBR：$conflict；保留原配置，跳过。"; return 2
+            log "sysctl --system 会覆盖项目网络设置：${conflict}；保留原配置，跳过。"; return 2
         fi
     fi
 }
@@ -67,25 +68,32 @@ install_bbr() {
         return 2
     fi
     check_bbr_persistence || return $?
-    current=$(sysctl -n net.ipv4.tcp_congestion_control)
-    if [[ -e "$SYSCTL_FILE" ]]; then
+    current=$(sysctl -n net.ipv4.tcp_congestion_control) || return 1
+    if [[ -e "$SYSCTL_FILE" || -L "$SYSCTL_FILE" ]]; then
         [[ -f "$BBR_STATE/config.sha256" && ! -L "$SYSCTL_FILE" ]] || { fail 'BBR 配置已存在但缺少管理记录，保留原文件'; return 1; }
         verify_sha256 "$SYSCTL_FILE" "$(cat "$BBR_STATE/config.sha256")" || return 1
     else
         # Preserve an older interrupted transaction for explicit recovery.
-        [[ ! -e "$BBR_STATE/original" ]] || { fail '存在未完成的 BBR 变更，请先用 uninstall --restore-bbr 恢复'; return 1; }
-        mkdir -p "$BBR_STATE"
-        chmod 700 "$BBR_STATE"
-        printf '%s\n' "$current" > "$BBR_STATE/original"
-        printf '# Managed by ShellReady\nnet.ipv4.tcp_congestion_control = bbr\n' > "$BBR_STATE/config"
-        sha256sum "$BBR_STATE/config" | awk '{print $1}' > "$BBR_STATE/config.sha256"
-        install -m 644 "$BBR_STATE/config" "$SYSCTL_FILE"
+        [[ ! -e "$BBR_STATE/original" ]] || { fail '存在未完成的 BBR 变更，请先用 bbr-restore --yes 恢复'; return 1; }
+        mkdir -p "$BBR_STATE" || return 1
+        chmod 700 "$BBR_STATE" || return 1
+        printf '%s\n' "$current" > "$BBR_STATE/original" || return 1
+        printf '# Managed by ShellReady\nnet.ipv4.tcp_congestion_control = bbr\n' > "$BBR_STATE/config" || return 1
+        sha256sum "$BBR_STATE/config" | awk '{print $1}' > "$BBR_STATE/config.sha256" || return 1
+        if ! install -m 644 "$BBR_STATE/config" "$SYSCTL_FILE"; then
+            if restore_bbr; then
+                fail 'BBR 持久配置写入失败，已恢复原设置。'
+            else
+                fail 'BBR 持久配置写入失败；请运行 bbr-restore --yes 检查恢复记录。'
+            fi
+            return 1
+        fi
     fi
     if ! sysctl -w net.ipv4.tcp_congestion_control=bbr; then
         if restore_bbr; then
             fail 'BBR 应用失败，已恢复原设置。'
         else
-            fail 'BBR 应用失败且未能自动恢复；请运行 uninstall --restore-bbr 检查恢复记录。'
+            fail 'BBR 应用失败且未能自动恢复；请运行 bbr-restore --yes 检查恢复记录。'
         fi
         return 1
     fi
@@ -96,12 +104,12 @@ install_bbr() {
 restore_bbr() {
     local original current
     [[ -f "$BBR_STATE/original" ]] || { log '无 ShellReady BBR 恢复记录'; return 0; }
-    if [[ -e "$SYSCTL_FILE" ]]; then
+    if [[ -e "$SYSCTL_FILE" || -L "$SYSCTL_FILE" ]]; then
         [[ ! -L "$SYSCTL_FILE" ]] || { fail 'BBR 配置变成符号链接，拒绝恢复'; return 1; }
         verify_sha256 "$SYSCTL_FILE" "$(cat "$BBR_STATE/config.sha256")" || return 1
     fi
     original=$(cat "$BBR_STATE/original")
-    current=$(sysctl -n net.ipv4.tcp_congestion_control)
+    current=$(sysctl -n net.ipv4.tcp_congestion_control) || return 1
     if [[ "$current" != bbr && "$current" != "$original" ]]; then
         fail '运行态算法已被其他操作修改，拒绝覆盖'; return 1
     fi

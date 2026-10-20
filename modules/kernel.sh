@@ -115,7 +115,7 @@ install_kernel() {
     if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -qx 'install ok installed'; then
         if [[ ! -d "$record" ]]; then
             log "内核包已存在：${pkg}；不接管此前由其他方式安装的内核。"
-            log "当前运行：$(uname -r)；目标：$kernel；请单独核验引导与 BBRv3 状态。"
+            log "当前运行：$(uname -r)；目标：${kernel}；请单独核验引导与 BBRv3 状态。"
             return 2
         fi
         already_installed=1
@@ -190,4 +190,41 @@ remove_kernel() {
     verify_kernel_boot "$(uname -r)" || return 1
     rm -rf -- "$record"
     log "已移除非运行内核：${kernel}；未执行重启。"
+}
+
+# A list is read-only: use a private temporary directory and never enter preflight/install.
+kernel_release_tags() (
+    # Keep the temporary path in subshell scope for EXIT cleanup on Bash 3.2.
+    local metadata expected
+    if ! command -v jq >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; then
+        fail '列出内核版本需要 curl 和 jq（可通过 apt-get install curl jq 安装）。'; return 1
+    fi
+    case "$ARCH" in x86_64) expected=x86_64 ;; aarch64) expected=arm64 ;; *) return 1 ;; esac
+    directory=$(mktemp -d)
+    trap 'rm -rf -- "$directory"' EXIT
+    metadata="$directory/releases.json"
+    download 'https://api.github.com/repos/byJoey/Actions-bbr-v3/releases?per_page=100' "$metadata" || return 1
+    jq -er --arg prefix "$expected" '
+        if type != "array" then error("GitHub release response is not an array") else . end
+        | [.[] | select(.draft == false and .prerelease == false)
+          | select(.tag_name | test("^" + $prefix + "-[0-9]+\\.[0-9]+\\.[0-9]+$"))]
+        | sort_by(.published_at) | reverse | unique_by(.tag_name) | sort_by(.published_at) | reverse
+        | if length == 0 then error("no matching standard kernel releases") else .[].tag_name end
+    ' "$metadata"
+)
+
+list_kernel_versions() {
+    log '当前架构标准版内核 tag（最近 100 条发行记录内筛选）：'
+    kernel_release_tags
+}
+
+list_managed_kernels() {
+    local record found=0
+    for record in "$KERNEL_STATE"/*; do
+        [[ -f "$record/kernel" ]] || continue
+        found=1
+        log "tag：${record##*/}；内核：$(cat "$record/kernel")"
+    done
+    [[ "$found" == 1 ]] || log '没有 ShellReady 记录的内核。'
+    status_kernel
 }

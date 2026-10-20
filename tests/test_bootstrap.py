@@ -65,6 +65,13 @@ esac
         self.assertEqual((self.work / "args").read_text().splitlines(), ["--user", "test-user", "--skip-bbr"])
         self.assertIn("/tar.gz/" + COMMIT, (self.work / "requests").read_text())
 
+    def test_default_and_menu_entry_are_forwarded_without_inventing_an_action(self):
+        for args in ((), ('menu',)):
+            with self.subTest(args=args):
+                result = self.run_entry(*args)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual((self.work / 'args').read_text().split(), list(args))
+
     def test_large_commit_response_does_not_abort_with_sigpipe(self):
         self.metadata.write_text('{\n  "sha": "' + COMMIT + '",\n  "files": [\n' +
                                  ('    {\n      "sha": "' + "b" * 40 + '",\n      "filename": "fixture"\n    },\n') * 10000 + ']\n}\n')

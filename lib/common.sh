@@ -82,9 +82,9 @@ prepare_user_dirs() {
     if [[ -e "$PREFIX" && ! -f "$PREFIX/.shellready" ]]; then
         fail "目录已存在且不属于 ShellReady：$PREFIX"; return 1
     fi
-    as_user mkdir -p "$PREFIX/bin" "$PREFIX/tools" "$PREFIX/config/atuin" "$STATE/backups"
-    as_user touch "$PREFIX/.shellready"
-    as_user chmod 700 "$STATE" "$STATE/backups"
+    as_user mkdir -p "$PREFIX/bin" "$PREFIX/tools" "$PREFIX/config/atuin" "$STATE/backups" || return 1
+    as_user touch "$PREFIX/.shellready" || return 1
+    as_user chmod 700 "$STATE" "$STATE/backups" || return 1
 }
 
 # Atomic replacement while retaining the target user's ownership.
