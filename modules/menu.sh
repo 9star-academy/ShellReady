@@ -162,6 +162,22 @@ menu_prompt() {
     if [[ "$MENU_READ_KEYS" == 1 ]]; then printf '\033[K'; fi
 }
 
+menu_author_credit() {
+    local author=tangbaichuan github=https://github.com/reedtang666 caption padding
+    caption="作者：$author  |  GitHub：$github"
+    menu_fit "$caption" "$MENU_WIDTH"
+    if [[ "$MENU_TEXT" != "$caption" ]]; then
+        menu_line "作者：$author" "$MENU_ACCENT"
+        menu_line "GitHub：$github" "$MENU_CREAM"
+        return 0
+    fi
+    padding=$((MENU_WIDTH - MENU_TEXT_WIDTH))
+    printf '%b作者：%b%s%b  |  GitHub：%b%s%*s%b\n' \
+        "$MENU_BG$MENU_MUTED" "$MENU_ACCENT" "$author" "$MENU_MUTED" \
+        "$MENU_CREAM" "$github" "$padding" '' "$MENU_RESET"
+    MENU_LINES=$((MENU_LINES + 1))
+}
+
 menu_draw() {
     local kind=$1 bbr_state='[未启用]'
     MENU_LINES=0
@@ -169,6 +185,7 @@ menu_draw() {
     if [[ "$kind" == main ]]; then
         menu_line 'ShellReady 管理菜单 / 新服务器，一键配顺手' "$MENU_ACCENT"
         menu_line "用户 ${TARGET_USER}  /  ${PRETTY_NAME:-Linux}  /  ${ARCH:-未知架构}" "$MENU_MUTED"
+        menu_author_credit
         menu_separator
         menu_section '一键配置'
         menu_item 1 '一键安装全部六项功能' '[推荐]'
@@ -193,6 +210,7 @@ menu_draw() {
         menu_line "TCP 算法：${MENU_TCP:-不可读取}    默认队列：${MENU_QDISC:-不可读取}"
         menu_line "BBR 版本：$MENU_VERSION" "$MENU_MUTED"
         menu_line "运行内核：$MENU_KERNEL" "$MENU_MUTED"
+        menu_author_credit
         menu_separator
         menu_section '状态与启用'
         menu_item 1 '查看 BBR、内核和实际网卡队列' '[只读]'

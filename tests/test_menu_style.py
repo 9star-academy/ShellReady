@@ -380,6 +380,39 @@ print('PROBE:%%s:%%s' %% (rc, int(before == after)), flush=True)
                             self.assertEqual(width, 78, repr(line))
                     self.finish(terminal)
 
+    def test_author_credit_is_in_both_headers_and_survives_minimum_window_redraw(self):
+        for entry in ('main_menu', 'bbr_menu'):
+            with self.subTest(entry=entry):
+                terminal = self.terminal(rows=24, columns=64, ENTRY=entry)
+                screen = MenuScreen(columns=64, rows=24)
+                output = self.receive(*terminal[:2])
+                plain = ANSI.sub('', output)
+                section = '一键配置' if entry == 'main_menu' else '状态与启用'
+                self.assertIn('tangbaichuan', plain)
+                self.assertIn('https://github.com/reedtang666', plain)
+                self.assertLess(plain.index('tangbaichuan'), plain.index(section))
+                screen.feed(output)
+                screen.feed(self.send(terminal, b'2'))
+                visible = '\n'.join(''.join(row) for row in screen.cells)
+                self.assertIn('tangbaichuan', visible)
+                self.assertIn('https://github.com/reedtang666', visible)
+                self.assertIn('ShellReady', visible)
+                self.finish(terminal, b'\x04')
+
+    def test_author_credit_keeps_full_url_in_narrow_and_plain_menus(self):
+        for entry in ('main_menu', 'bbr_menu'):
+            with self.subTest(entry=entry):
+                result = self.pipe(ENTRY=entry)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('作者：tangbaichuan', result.stdout)
+                self.assertIn('GitHub：https://github.com/reedtang666', result.stdout)
+                self.assertNotIn('\x1b', result.stdout)
+                terminal = self.terminal(rows=16, columns=48, ENTRY=entry)
+                output = ANSI.sub('', self.receive(*terminal[:2]))
+                self.assertIn('作者：tangbaichuan', output)
+                self.assertIn('GitHub：https://github.com/reedtang666', output)
+                self.finish(terminal)
+
     def test_resize_to_small_terminal_retains_the_visible_numeric_choice(self):
         terminal = self.terminal()
         self.receive(*terminal[:2])
