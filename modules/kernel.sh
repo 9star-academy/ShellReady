@@ -121,10 +121,10 @@ install_kernel() {
         already_installed=1
     fi
     if [[ -d "$record" ]]; then
-        [[ -f "$record/package" && -f "$record/kernel" && -f "$record/sha256" ]] &&
-            [[ $(cat "$record/package") == "$pkg" && $(cat "$record/kernel") == "$kernel" && $(cat "$record/sha256") == "${digest#sha256:}" ]] || {
-            fail '已有内核安装记录与发行包不符，拒绝覆盖'; return 1;
-        }
+        if [[ ! -f "$record/package" || ! -f "$record/kernel" || ! -f "$record/sha256" ]] ||
+            [[ $(cat "$record/package") != "$pkg" || $(cat "$record/kernel") != "$kernel" || $(cat "$record/sha256") != "${digest#sha256:}" ]]; then
+            fail '已有内核安装记录与发行包不符，拒绝覆盖'; return 1
+        fi
     else
         mkdir -p "$record"
         chmod 755 "$KERNEL_STATE" "$record"

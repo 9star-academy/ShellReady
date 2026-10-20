@@ -1,5 +1,13 @@
 # ShellReady 首版验证记录
 
+## 2026-10-20：GitHub Actions SC2015 兼容性修复
+
+用户截图显示 static 在 `bash tests/check.sh` 的 ShellCheck 阶段失败，定位到 `install.sh:83` 与 `modules/kernel.sh:124` 的 `A && B || C` 条件；Python 步骤未运行，截图中的安装矩阵均为成功。此前本地使用 ShellCheck 0.11.0 未报告这两处，不能据此认定远端静态检查已通过。
+
+在临时目录使用官方 ShellCheck 0.9.0，对提交 `c223cfc` 的源码副本复现完全相同的两条 SC2015（退出 1）。现将参数缺失和内核记录校验改为明确的 if 条件，保留短路求值、错误提示及原安装行为；未关闭规则、降低检查级别或修改 CI。工具仅在临时目录使用，未新增项目依赖。
+
+修复后 `PATH=/private/tmp/shellready-shellcheck-090/shellcheck-v0.9.0:$PATH bash tests/check.sh` 和原 ShellCheck 0.11.0 下同一检查均退出 0；`python3 -m unittest discover -s tests -v` **176 项全部通过，无跳过**（68.283 秒）。另手动核验 `--user` / `--tag` 缺值、空值及后接选项共 6 种输入，均返回 1 并提示缺少参数，无未绑定变量异常。`git diff --check` 通过，未暂存、未提交、未推送；远端 Actions 需在用户推送修复后重新验收。
+
 ## 2026-10-20：菜单更新与原一键安装整体复查
 
 复现并修复更新准备阶段的退出码冲突：下载工具或 tar 解压失败返回 2 时，旧实现将其直接传给菜单，被误认为修复阶段的“跳过/待验证”，提示退出旧菜单。先新增两个失败用例，均实际得到 `2 != 1`；现 bootstrap 将创建临时目录、下载和解压错误统一返回 1，仍原样传递安装器的退出码。成功路径、无参数安装和显式参数转发保留。

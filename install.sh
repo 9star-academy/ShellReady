@@ -80,7 +80,9 @@ while (($#)); do
             [[ "$ACTION_SET" == 0 ]] || { fail '只能指定一个操作'; exit 1; }
             ACTION=$1; ACTION_SET=1; shift ;;
         --user|--tag)
-            (($# >= 2)) && [[ -n "$2" && "$2" != -* ]] || { fail "$1 缺少参数"; exit 1; }
+            if (($# < 2)) || [[ -z "$2" || "$2" == -* ]]; then
+                fail "$1 缺少参数"; exit 1
+            fi
             if [[ "$1" == --user ]]; then TARGET_USER=$2; else TAG=$2; fi
             shift 2 ;;
         --keep-shell) KEEP_SHELL=1; shift ;;
