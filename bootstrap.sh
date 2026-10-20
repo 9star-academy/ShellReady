@@ -5,7 +5,7 @@ REPO=9star-academy/ShellReady
 REF=${SHELLREADY_REF:-main}
 [[ "$REF" =~ ^[a-zA-Z0-9._/-]+$ && "$REF" != -* ]] || { echo '无效仓库 ref' >&2; exit 1; }
 command -v tar >/dev/null || { echo '需要 tar' >&2; exit 1; }
-WORK=$(mktemp -d)
+WORK=$(mktemp -d) || exit 1
 trap 'rm -rf -- "$WORK"' EXIT
 fetch() {
     if command -v curl >/dev/null 2>&1; then
@@ -16,12 +16,14 @@ fetch() {
         echo '需要 curl 或 wget' >&2; return 1
     fi
 }
-fetch "https://api.github.com/repos/$REPO/commits/$REF" "$WORK/commit.json"
+# Only the installer may use exit 2 for skipped/pending work. Download/extraction
+# tools also use 2 for fatal errors, which must remain failures in the menu.
+fetch "https://api.github.com/repos/$REPO/commits/$REF" "$WORK/commit.json" || exit 1
 # Consume all matches: head can close the pipe early and trigger pipefail/SIGPIPE.
 COMMIT=$(sed -n 's/^[[:space:]]*"sha": "\([0-9a-f]\{40\}\)",.*/\1/p' "$WORK/commit.json" | sed -n '1p')
 [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo '无法解析 commit（可能触发 GitHub API 限额）' >&2; exit 1; }
-fetch "https://codeload.github.com/$REPO/tar.gz/$COMMIT" "$WORK/source.tar.gz"
-mkdir "$WORK/source"
-tar -xzf "$WORK/source.tar.gz" --strip-components=1 -C "$WORK/source"
+fetch "https://codeload.github.com/$REPO/tar.gz/$COMMIT" "$WORK/source.tar.gz" || exit 1
+mkdir "$WORK/source" || exit 1
+tar -xzf "$WORK/source.tar.gz" --strip-components=1 -C "$WORK/source" || exit 1
 printf 'ShellReady snapshot: %s\n' "$COMMIT"
 bash "$WORK/source/install.sh" "$@"

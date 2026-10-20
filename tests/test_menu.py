@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class MenuTests(unittest.TestCase):
-    def menu(self, choices, entry='main_menu', fail=False):
+    def menu(self, choices, entry='main_menu', fail=False, rc=None):
         with tempfile.TemporaryDirectory() as tmp:
             script = r'''set -euo pipefail
 source "$ROOT/lib/common.sh"
@@ -26,7 +26,7 @@ main_entry=$ENTRY
             return subprocess.run(['bash', '-c', script], input=choices, text=True,
                                   capture_output=True, timeout=5,
                                   env={**os.environ, 'ROOT': str(ROOT), 'ENTRY': entry,
-                                       'TEST_RC': '1' if fail else '0', 'HOME': tmp})
+                                       'TEST_RC': str(rc) if rc is not None else ('1' if fail else '0'), 'HOME': tmp})
 
     def test_main_exit_does_not_dispatch_install(self):
         result = self.menu('0\n')
@@ -65,6 +65,32 @@ main_entry=$ENTRY
         for action in ('bbr-status', 'bbr-enable', 'bbr-restore'):
             self.assertIn(f'CALL:{action}', result.stdout)
 
+    def test_self_update_cancel_or_eof_does_not_download(self):
+        for choices in ('11\nn\n0\n', '11\n'):
+            with self.subTest(choices=choices):
+                result = self.menu(choices)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('更新 ShellReady', result.stdout)
+                self.assertNotIn('CALL:', result.stdout)
+
+    def test_self_update_success_or_partial_exits_old_menu(self):
+        for code in (0, 2):
+            with self.subTest(code=code):
+                result = self.menu('11\ny\n8\n0\n', rc=code)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('CALL:self-update', result.stdout)
+                self.assertNotIn('CALL:status', result.stdout)
+                self.assertIn('shellready', result.stdout)
+                if code == 2:
+                    self.assertIn('待验证', result.stdout)
+
+    def test_failed_self_update_returns_to_menu(self):
+        result = self.menu('11\ny\n8\n0\n', fail=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('CALL:self-update', result.stdout)
+        self.assertIn('CALL:status', result.stdout)
+        self.assertIn('失败', result.stdout)
+
     def test_manager_defaults_to_menu_but_explicit_install_is_preserved(self):
         with tempfile.TemporaryDirectory() as tmp:
             script = r'''set -euo pipefail
@@ -75,6 +101,7 @@ PREFIX="$TARGET_HOME/prefix"; WORK="$TARGET_HOME/work"
 mkdir -p "$PREFIX/bin" "$WORK"
 as_user() { "$@"; }
 install_manager
+[[ -s "$PREFIX/app/bootstrap.sh" && -s "$PREFIX/app/modules/update.sh" ]] || exit 99
 printf '#!/bin/bash\nprintf "ACTION:%%s\\n" "$*"\n' > "$PREFIX/app/install.sh"
 "$PREFIX/bin/shellready"
 "$PREFIX/bin/shellready" install

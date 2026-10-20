@@ -25,7 +25,7 @@ menu_style() {
 }
 
 menu_dimensions() {
-    local size rows='' columns=''
+    local minimum_rows=${1:-24} size rows='' columns=''
     if [[ -t 0 && -t 1 ]]; then
         size=$(stty size 2>/dev/null || true)
         read -r rows columns <<< "$size" || true
@@ -38,7 +38,7 @@ menu_dimensions() {
     MENU_KEYS=0; MENU_READ_KEYS=0
     if [[ -t 0 && -t 1 && ${TERM:-dumb} != dumb && -z ${NO_COLOR:-} ]]; then
         MENU_READ_KEYS=1
-        if ((rows >= 24 && columns >= 64)); then MENU_KEYS=1; fi
+        if ((rows >= minimum_rows && columns >= 64)); then MENU_KEYS=1; fi
     fi
 }
 
@@ -202,6 +202,7 @@ menu_draw() {
         menu_item 8 '查看全部功能状态'
         menu_item 9 '修复已安装功能'
         menu_item 10 '卸载 ShellReady' '[需确认]' "$MENU_WARN"
+        menu_item 11 '更新 ShellReady' '[需联网]'
         menu_item 0 '退出' '' "$MENU_MUTED"
         menu_separator
         menu_line '状态来自安装/启停记录；终端功能需重新连接 SSH 验证。' "$MENU_MUTED"
@@ -249,14 +250,16 @@ menu_input_interrupt() {
 }
 
 menu_choose() {
-    local kind=$1 key next sequence index drawn=0 previous_size typed_choice=1
+    local kind=$1 key next sequence index drawn=0 previous_size typed_choice=1 minimum_rows=24
     local MENU_LINES=0 MENU_SELECTED=0 MENU_INPUT='' MENU_KEYS MENU_READ_KEYS MENU_ROWS MENU_COLUMNS MENU_WIDTH
     local MENU_TCP MENU_QDISC MENU_KERNEL MENU_VERSION MENU_STATES=() options=()
     local MENU_TTY_STATE='' MENU_SAVED_INT='' MENU_SAVED_TERM='' MENU_TRAPS_SET=0
-    if [[ "$kind" == main ]]; then options=(1 2 3 4 5 6 7 8 9 10 0); else options=(1 2 3 4 5 6 0); fi
+    if [[ "$kind" == main ]]; then
+        options=(1 2 3 4 5 6 7 8 9 10 11 0); minimum_rows=25
+    else options=(1 2 3 4 5 6 0); fi
     menu_style
     menu_snapshot "$kind"
-    menu_dimensions
+    menu_dimensions "$minimum_rows"
     if [[ "$MENU_READ_KEYS" == 1 ]]; then
         MENU_TTY_STATE=$(stty -g 2>/dev/null || true)
         if [[ -n "$MENU_TTY_STATE" ]]; then
@@ -269,7 +272,7 @@ menu_choose() {
     printf '\n'
     while :; do
         previous_size="$MENU_ROWS:$MENU_COLUMNS"
-        menu_dimensions
+        menu_dimensions "$minimum_rows"
         if [[ -z "$MENU_TTY_STATE" ]]; then MENU_KEYS=0; MENU_READ_KEYS=0; fi
         if [[ "$drawn" == 1 && "$previous_size" == "$MENU_ROWS:$MENU_COLUMNS" ]]; then
             if [[ "$MENU_KEYS" == 1 ]]; then
@@ -414,7 +417,7 @@ bbr_menu() {
 }
 
 main_menu() {
-    local choice
+    local choice update_rc
     while :; do
         menu_choose main || return 0
         choice=$MENU_CHOICE
@@ -432,6 +435,16 @@ main_menu() {
                 if menu_confirm '卸载 ShellReady？保留历史、配置备份和全机 BBR/内核'; then
                     # The installed menu's own source may have been removed.
                     if menu_action uninstall; then return 0; else log '卸载失败，请查看上方原因。'; fi
+                fi ;;
+            11)
+                if menu_confirm '从项目 main 更新 ShellReady 并修复已装组件？保留历史/停用状态，不处理 BBR、内核或登录 Shell'; then
+                    update_rc=0
+                    menu_action self-update || update_rc=$?
+                    case "$update_rc" in
+                        0) log '更新完成；已退出旧菜单，请输入 shellready 打开新版。'; return 0 ;;
+                        2) log '更新存在跳过或待验证项，请检查上方结果；已退出旧菜单，可输入 shellready 重新检查。'; return 0 ;;
+                        *) log "更新失败（退出码 ${update_rc}），请查看上方原因，可修复后重试。" ;;
+                    esac
                 fi ;;
             0) return 0 ;;
             *) log '无效选项，请重新选择。' ;;

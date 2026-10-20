@@ -62,7 +62,7 @@ install_zoxide() { install_tool zoxide; }
 
 install_manager() {
     local rel dir
-    for rel in install.sh lib/common.sh modules/tools.sh modules/shell.sh modules/bbr.sh modules/kernel.sh modules/components.sh modules/menu.sh modules/qdisc.sh \
+    for rel in install.sh bootstrap.sh lib/common.sh modules/tools.sh modules/shell.sh modules/bbr.sh modules/kernel.sh modules/components.sh modules/update.sh modules/menu.sh modules/qdisc.sh \
         config/assets.tsv config/init.zsh config/starship.toml config/atuin/config.toml; do
         dir=$(dirname "$rel")
         as_user mkdir -p "$PREFIX/app/$dir" || return 1

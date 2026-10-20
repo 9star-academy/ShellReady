@@ -90,6 +90,22 @@ esac
         self.assertNotEqual(p.returncode, 0)
         self.assertFalse((self.work / "args").exists())
 
+    def test_extraction_failure_is_not_reported_as_partial_installation(self):
+        tar = self.work / 'bin/tar'
+        tar.write_text('#!/bin/sh\necho "archive extraction failed" >&2\nexit 2\n')
+        tar.chmod(0o755)
+        p = self.run_entry()
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn('archive extraction failed', p.stderr)
+        self.assertFalse((self.work / 'args').exists())
+
+    def test_download_exit_two_is_not_reported_as_partial_installation(self):
+        curl = self.work / 'bin/curl'
+        curl.write_text('#!/bin/sh\necho "download failed" >&2\nexit 2\n')
+        p = self.run_entry()
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertFalse((self.work / 'args').exists())
+
     def test_invalid_commit_never_downloads_archive(self):
         self.metadata.write_text('{"message": "API rate limit exceeded"}\n')
         p = self.run_entry()

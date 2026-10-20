@@ -38,6 +38,14 @@ class ManagementCLITests(unittest.TestCase):
         self.assertFalse((self.fixture.work / 'lock').exists())
         self.assertFalse((self.fixture.work / 'calls').exists())
 
+    def test_self_update_delegates_before_outer_elevation_and_lock(self):
+        with (self.fixture.repo / 'modules/update.sh').open('a') as module:
+            module.write('\nself_update() { echo self-update >> "$TEST_WORK/calls"; }\n')
+        result = self.fixture.run_install('self-update')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((self.fixture.work / 'calls').read_text().splitlines(), ['self-update'])
+        self.assertFalse((self.fixture.work / 'lock').exists())
+
     def test_total_status_checks_existing_queue_management_records(self):
         # Resolve the paths after module globals have been sourced.
         with (self.fixture.repo / 'modules/qdisc.sh').open('a') as f:

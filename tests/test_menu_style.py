@@ -206,7 +206,7 @@ class MenuStyleTests(unittest.TestCase):
     def test_arrows_and_multidigit_uninstall_keep_confirmation(self):
         terminal = self.terminal()
         self.receive(*terminal[:2])
-        output = self.send(terminal, b'\x1b[A')
+        output = self.send(terminal, b'\x1b[A\x1b[A')
         self.assertRegex(ANSI.sub('', output), r'>\s+10\. 卸载 ShellReady')
         self.send(terminal, b'\n', '[y/N]')
         output = self.send(terminal, b'n\n')
@@ -383,8 +383,9 @@ print('PROBE:%%s:%%s' %% (rc, int(before == after)), flush=True)
     def test_author_credit_is_in_both_headers_and_survives_minimum_window_redraw(self):
         for entry in ('main_menu', 'bbr_menu'):
             with self.subTest(entry=entry):
-                terminal = self.terminal(rows=24, columns=64, ENTRY=entry)
-                screen = MenuScreen(columns=64, rows=24)
+                rows = 25 if entry == 'main_menu' else 24
+                terminal = self.terminal(rows=rows, columns=64, ENTRY=entry)
+                screen = MenuScreen(columns=64, rows=rows)
                 output = self.receive(*terminal[:2])
                 plain = ANSI.sub('', output)
                 section = '一键配置' if entry == 'main_menu' else '状态与启用'
@@ -397,6 +398,35 @@ print('PROBE:%%s:%%s' %% (rc, int(before == after)), flush=True)
                 self.assertIn('tangbaichuan', visible)
                 self.assertIn('https://github.com/reedtang666', visible)
                 self.assertIn('ShellReady', visible)
+                self.finish(terminal, b'\x04')
+
+    def test_update_option_11_highlights_without_running_and_can_be_cancelled(self):
+        terminal = self.terminal()
+        self.receive(*terminal[:2])
+        output = self.send(terminal, b'11')
+        self.assertRegex(ANSI.sub('', output), r'>\s+11\. 更新 ShellReady')
+        self.assertNotIn('CALL:', output)
+        self.send(terminal, b'\n', marker='[y/N]')
+        output = self.send(terminal, b'n\n')
+        self.assertNotIn('CALL:', output)
+        self.finish(terminal)
+
+    def test_larger_main_menu_uses_25_rows_and_keeps_header_during_redraw(self):
+        for rows in (24, 25):
+            with self.subTest(rows=rows):
+                terminal = self.terminal(rows=rows, columns=80)
+                output = self.receive(*terminal[:2])
+                if rows == 24:
+                    self.assertNotIn('↑', ANSI.sub('', output))
+                else:
+                    self.assertIn('↑', ANSI.sub('', output))
+                    screen = MenuScreen(columns=80, rows=rows)
+                    screen.feed(output)
+                    screen.feed(self.send(terminal, b'11'))
+                    visible = '\n'.join(''.join(row) for row in screen.cells)
+                    self.assertIn('ShellReady 管理菜单', visible)
+                    self.assertIn('https://github.com/reedtang666', visible)
+                    self.assertIn('11. 更新 ShellReady', visible)
                 self.finish(terminal, b'\x04')
 
     def test_author_credit_keeps_full_url_in_narrow_and_plain_menus(self):

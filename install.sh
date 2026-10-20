@@ -13,6 +13,8 @@ source "$ROOT/modules/bbr.sh"
 source "$ROOT/modules/kernel.sh"
 # shellcheck source=modules/components.sh
 source "$ROOT/modules/components.sh"
+# shellcheck source=modules/update.sh
+source "$ROOT/modules/update.sh"
 # shellcheck source=modules/menu.sh
 source "$ROOT/modules/menu.sh"
 # shellcheck source=modules/qdisc.sh
@@ -21,7 +23,7 @@ source "$ROOT/modules/qdisc.sh"
 usage() {
     cat <<'EOF'
 ShellReady — 新服务器，一键配顺手
-用法：bash install.sh [install|menu|status|update|repair|uninstall|component|bbr-menu|bbrv3|kernel-remove] [选项]
+用法：bash install.sh [install|menu|status|update|self-update|repair|uninstall|component|bbr-menu|bbrv3|kernel-remove] [选项]
 
   install / update    安装清单固定版本、修复接入配置（默认 install）
   menu                六项功能总菜单（原无参数一键安装不变）
@@ -29,6 +31,7 @@ ShellReady — 新服务器，一键配顺手
   component NAME OP   管理单项：trzsz/starship/suggestions/atuin/zoxide
                       操作：install/status/enable/disable/remove
   repair              仅修复已有组件，保留停用状态
+  self-update         获取项目 main 新版并修复已装组件；不处理 BBR、内核或登录 Shell
   bbr-status          只读检查 BBR、内核与实际队列
   bbr-enable          单独启用当前内核 BBR
   bbr-fq --yes        主动启用 BBR + FQ，保留多队列结构；自定义队列跳过
@@ -73,7 +76,7 @@ while (($#)); do
             validate_component "$COMPONENT" || exit 1
             case "$OPERATION" in install|status|enable|disable|remove) ;; *) fail "未知组件操作：$OPERATION"; exit 1 ;; esac
             shift 3 ;;
-        install|update|status|uninstall|menu|bbr-menu|repair|bbr-status|bbr-enable|bbr-fq|bbr-restore|bbr-versions|kernel-list|bbrv3|kernel-remove)
+        install|update|self-update|status|uninstall|menu|bbr-menu|repair|bbr-status|bbr-enable|bbr-fq|bbr-restore|bbr-versions|kernel-list|bbrv3|kernel-remove)
             [[ "$ACTION_SET" == 0 ]] || { fail '只能指定一个操作'; exit 1; }
             ACTION=$1; ACTION_SET=1; shift ;;
         --user|--tag)
@@ -102,6 +105,8 @@ resolve_user
 case "$ACTION" in
     menu) main_menu; exit 0 ;;
     bbr-menu) bbr_menu; exit 0 ;;
+    # New snapshot's repair owns elevation/locking; do not hold an outer lock.
+    self-update) self_update; exit $? ;;
 esac
 READ_ONLY=0
 case "$ACTION" in status|bbr-status|bbr-versions|kernel-list) READ_ONLY=1 ;; esac

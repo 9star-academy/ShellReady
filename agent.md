@@ -85,6 +85,7 @@ Zsh 是 zsh-autosuggestions 的依赖，应纳入依赖处理，不算额外的�
 - 配置使用标准 HOME/.zshrc；符号链接配置或自定义 ZDOTDIR 不自动修改。保留现有配置和主题文件。
 - 工具装入目标用户 ~/.local/share/shellready，提供本地 shellready 管理命令；固定清单见 config/assets.tsv。
 - update 按当前清单修复或安装；不会自动拉取上游 latest，变更清单需使用新版仓库。
+- 总菜单 11「更新 ShellReady」对应独立 self-update，获取本项目 main 的完整固定 commit 快照，再 repair 已有组件；保留历史、停用状态，不补装已卸载工具，固定 --skip-bbr --keep-shell 并传递目标用户。下载不持有外层锁，由新版修复进程负责提权与加锁；成功/部分完成后退出旧菜单。旧 update/默认一键安装含义不变，旧 10 卸载编号不变。
 - 默认 BBR 不改现有 qdisc；不支持返回跳过，应用失败尝试恢复。
 - 可选内核来源为 byJoey/Actions-bbr-v3 标准 release；用户必须提供 tag 和 --yes，按 API SHA-256 校验 linux-image 包，不执行上游远程安装脚本。最低系统版本为 Ubuntu 24.04+、Debian 12+（包括 Ubuntu 26.04），仍要求可验证的 GRUB 回退环境。
 - 普通卸载保留全机 BBR；--restore-bbr 显式恢复，发生后续修改冲突则停止。独立 kernel-remove 拒绝移除正在运行的内核。
