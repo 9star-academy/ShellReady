@@ -4,11 +4,13 @@ Only OS/user/package/network boundaries are replaced; the manager, component
 receipts, symlinks, shared Shell setup, menus and default dispatcher are real.
 """
 import os
+import errno
 import fcntl
 from pathlib import Path
 import pty
 import select
 import shutil
+import signal
 import struct
 import subprocess
 import tempfile
@@ -17,6 +19,21 @@ import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
+ZSH_PROMPT = 'SHELLREADY_TEST_READY> '
+
+
+def claim_terminal():
+    os.setsid()
+    fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+
+
+def stop_terminal_session(process, timeout=4):
+    if process.poll() is None:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    process.wait(timeout=timeout)
 
 
 class EntryTransitionTests(unittest.TestCase):
@@ -77,6 +94,9 @@ sysctl() {
 ''')
         self.env = {**os.environ, 'TEST_WORK': str(self.work),
                     'PATH': str(self.work / 'bin') + os.pathsep + os.environ['PATH']}
+        # A startup log can appear before Zsh is ready to read commands. Wait
+        # for the actual prompt, after configuration and terminal setup finish.
+        (self.home / '.zshrc').write_text(f'PS1={ZSH_PROMPT!r}\n')
 
     def seed(self, *tools):
         for line in (self.repo / 'config/assets.tsv').read_text().splitlines():
@@ -135,25 +155,35 @@ sysctl() {
                 process = subprocess.Popen(['bash', str(self.repo / 'install.sh'), *args],
                                            stdin=slave, stdout=slave, stderr=slave,
                                            env={**self.env, 'TERM': 'xterm-256color',
-                                                'COLORTERM': 'truecolor'})
+                                                'COLORTERM': 'truecolor'},
+                                           preexec_fn=claim_terminal)
                 output = b''
                 sent_exit = False
                 deadline = time.monotonic() + 15
                 try:
                     while time.monotonic() < deadline:
                         if select.select([master], [], [], 0.05)[0]:
-                            output += os.read(master, 65536)
-                            if not sent_exit and '正在进入'.encode() in output:
+                            try:
+                                chunk = os.read(master, 65536)
+                            except OSError as error:
+                                if error.errno != errno.EIO:
+                                    raise
+                                break
+                            if not chunk:
+                                break
+                            output += chunk
+                            if not sent_exit and ZSH_PROMPT.encode() in output:
                                 os.write(master, b'exit\n')
                                 sent_exit = True
                         elif process.poll() is not None:
                             break
-                    process.wait(timeout=1)
+                    try:
+                        process.wait(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        self.fail('Terminal command timed out; output:\n' + output.decode(errors='replace'))
                     self.assertEqual(process.returncode, 0, output.decode(errors='replace'))
                 finally:
-                    if process.poll() is None:
-                        process.kill()
-                    process.wait(timeout=4)
+                    stop_terminal_session(process)
                     os.close(master)
                     os.close(slave)
                 installer_output = output.decode().split('正在进入', 1)[0]

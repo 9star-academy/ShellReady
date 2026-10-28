@@ -1,5 +1,17 @@
 # ShellReady 首版验证记录
 
+## 2026-10-28：Actions 交互 Zsh 测试超时修复
+
+用户提供的 Actions 日志显示：`bash tests/check.sh` 通过，10 个 Linux 安装矩阵任务通过；`python3 -m unittest discover -s tests -v` 执行 198 项，217.215 秒后以 11 处错误退出。错误集中在两份新增交互测试的 `process.wait` 超时，不是下载、安装矩阵或 ShellCheck 失败。
+
+检查发现测试将“正在进入 Zsh”的日志或 `.zshrc` 开头的输出当成可输入信号，发送命令时 Shell 配置和终端初始化尚未完成；`openpty` 后也没有为子进程建立独立会话并取得控制终端。先补两个回归：启动程序清空输入队列时，旧实现可在本机复现同样的 `TimeoutExpired`（17.049 秒）；子进程会话/前台终端检查也失败。
+
+修复仅涉及测试辅助逻辑：以真正的 Zsh 提示符作为同步信号，使用现有菜单终端测试同样的 `setsid` + `TIOCSCTTY` 模式建立控制终端，处理终端结束时的 EIO，超时附带完整终端输出，并清理测试进程组。没有扩大超时、跳过用例、修改 Actions 工作流或改变实际自动进入 Zsh 的行为。
+
+`python3 -m unittest discover -s tests -v` 实际 **200 项全部通过，无跳过**（91.918 秒），包含新增两项回归；`PATH=/private/tmp/shellready-validation-20261026/shellcheck-v0.9.0:$PATH bash tests/check.sh` 的 Bash/Zsh 语法、ShellCheck 0.9.0、忽略规则及空白检查通过。
+
+本机仍为 macOS，未新增 Linux VM 或系统依赖；修复后的 Ubuntu Actions 和真实 Linux SSH 交互需在推送后验证。本次未提交、未推送。
+
 ## 2026-10-26：安装后自动进入 Zsh 与用户提示
 
 按用户确认的方案，交互终端的安装、update、repair 和单项安装全部成功后，先清理安装临时目录并关闭变更锁描述符，再通过现有 `as_user` 以目标用户启动交互登录 Zsh。菜单中的安装子进程仍使用 `/dev/null` 输入，不读取后续菜单选项；成功后提示“退出总菜单后会自动进入 Zsh”，退出菜单时再进入。后续安装/修复失败、卸载成功或在线自更新退出时取消待进入状态。

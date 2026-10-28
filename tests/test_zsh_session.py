@@ -4,6 +4,7 @@ import os
 import pty
 import select
 import subprocess
+import sys
 import tarfile
 import time
 import unittest
@@ -35,8 +36,6 @@ as_user() {
     env HOME="$TARGET_HOME" USER="$TARGET_USER" LOGNAME="$TARGET_USER" "$@"
 }
 ''')
-        self.home.joinpath('.zshrc').write_text(
-            'print -r -- "SESSION_READY:$USER:$SHELL"\n')
 
     def terminal(self, *args, choices='', session=True, manager=False, bootstrap=False,
                  session_exit=0, command=None):
@@ -47,7 +46,8 @@ as_user() {
             command = ['bash', str(transitions.ROOT / 'bootstrap.sh')]
         master, slave = pty.openpty()
         process = subprocess.Popen([*command, *args], stdin=slave, stdout=slave,
-                                   stderr=slave, env={**self.fixture.env, 'TERM': 'dumb'})
+                                   stderr=slave, env={**self.fixture.env, 'TERM': 'dumb'},
+                                   preexec_fn=transitions.claim_terminal)
         output = bytearray()
         sent_exit = False
         try:
@@ -65,7 +65,7 @@ as_user() {
                     if not chunk:
                         break
                     output.extend(chunk)
-                if b'SESSION_READY:' in output and not sent_exit:
+                if transitions.ZSH_PROMPT.encode() in output and not sent_exit:
                     self.assertTrue(session, output.decode(errors='replace'))
                     self.assertEqual(list(self.work.glob('install.*')), [],
                                      'installation scratch files survived into the session')
@@ -74,11 +74,12 @@ as_user() {
                     sent_exit = True
                 if process.poll() is not None:
                     break
-            process.wait(timeout=2)
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                self.fail('Terminal command timed out; output:\n' + output.decode(errors='replace'))
         finally:
-            if process.poll() is None:
-                process.kill()
-            process.wait(timeout=3)
+            transitions.stop_terminal_session(process, timeout=3)
             os.close(master)
             os.close(slave)
         text = output.decode(errors='replace')
@@ -100,10 +101,34 @@ as_user() {
         calls = (self.work / 'session-calls').read_text().splitlines()
         self.assertEqual(calls, ['fixture-user:env SHELL=/bin/zsh /bin/zsh -il'])
 
+    def test_startup_input_flush_does_not_swallow_session_commands(self):
+        self.seed_all()
+        # Simulate a startup program resetting the terminal input queue before
+        # Zsh reaches its first prompt. Commands sent during startup are lost.
+        with (self.home / '.zshrc').open('a') as rc_file:
+            rc_file.write(f'''"{sys.executable}" -c 'import select, termios
+select.select([0], [], [], 1)
+termios.tcflush(0, termios.TCIFLUSH)'
+''')
+        rc, output = self.terminal('--skip-bbr')
+        self.assertEqual(rc, 0, output)
+        self.assertIn('ACTIVE:', output)
+
+    def test_terminal_is_the_child_sessions_controlling_terminal(self):
+        command = [sys.executable, '-c', '''import os
+assert os.getsid(0) == os.getpid(), "child is not a session leader"
+assert os.isatty(0), "child input is not a terminal"
+assert os.tcgetpgrp(0) == os.getpgrp(), "child does not own the foreground terminal"
+print("CONTROL_TTY_READY")
+''']
+        rc, output = self.terminal(command=command, session=False)
+        self.assertEqual(rc, 0, output)
+        self.assertIn('CONTROL_TTY_READY', output)
+
     def test_noninteractive_install_finishes_without_opening_a_session(self):
         self.seed_all()
         result = self.fixture.run_cli('--skip-bbr')
-        self.assertNotIn('SESSION_READY:', result.stdout)
+        self.assertNotIn(transitions.ZSH_PROMPT, result.stdout)
         self.assertFalse((self.work / 'session-calls').exists())
 
     def test_keep_shell_does_not_enter_zsh_even_in_terminal(self):
@@ -217,7 +242,7 @@ runuser() {
         self.assertEqual(rc, 0, output)
         self.assertIn('退出总菜单后会自动进入 Zsh', output)
         self.assertEqual((self.work / 'session-calls').read_text().count('\n'), 1)
-        self.assertLess(output.index('退出总菜单后会自动进入 Zsh'), output.index('SESSION_READY:'))
+        self.assertLess(output.index('退出总菜单后会自动进入 Zsh'), output.index(transitions.ZSH_PROMPT))
 
     def test_component_install_from_menu_also_enters_zsh_on_exit(self):
         self.fixture.seed('atuin')
