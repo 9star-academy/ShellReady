@@ -10,7 +10,8 @@ HISTSIZE=50000
 SAVEHIST=50000
 setopt APPEND_HISTORY INC_APPEND_HISTORY HIST_IGNORE_DUPS HIST_IGNORE_SPACE
 autoload -Uz compinit
-compinit
+# Exclude insecure completion paths without stopping startup for a y/n prompt.
+compinit -i
 if [[ ! -e "$SHELLREADY_HOME/config/disabled/suggestions" && -r "$SHELLREADY_HOME/bin/zsh-autosuggestions.zsh" ]]; then
     source "$SHELLREADY_HOME/bin/zsh-autosuggestions.zsh"
 fi

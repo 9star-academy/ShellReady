@@ -114,6 +114,27 @@ termios.tcflush(0, termios.TCIFLUSH)'
         self.assertEqual(rc, 0, output)
         self.assertIn('ACTIVE:', output)
 
+    def test_insecure_completion_directory_is_excluded_without_prompting(self):
+        self.seed_all()
+        safe = self.work / 'safe-completions'
+        unsafe = self.work / 'unsafe-completions'
+        for directory, name in ((safe, 'safe'), (unsafe, 'unsafe')):
+            directory.mkdir()
+            (directory / f'_shellready_{name}').write_text(
+                f'#compdef shellready-{name}\nreturn 0\n')
+        unsafe.chmod(0o777)
+        with (self.home / '.zshrc').open('a') as rc_file:
+            rc_file.write('fpath=("$TEST_WORK/safe-completions" "$TEST_WORK/unsafe-completions" $fpath)\n')
+        (self.home / '.zlogin').write_text('''if [[ -o interactive ]]; then
+    print -r -- "COMPLETIONS:${_comps[shellready-safe]:-missing}:${_comps[shellready-unsafe]:-missing}"
+fi
+''')
+        rc, output = self.terminal('--skip-bbr')
+        self.assertEqual(rc, 0, output)
+        self.assertIn('COMPLETIONS:_shellready_safe:missing', output)
+        self.assertNotIn('Ignore insecure', output)
+        self.assertEqual(unsafe.stat().st_mode & 0o777, 0o777)
+
     def test_terminal_is_the_child_sessions_controlling_terminal(self):
         command = [sys.executable, '-c', '''import os
 assert os.getsid(0) == os.getpid(), "child is not a session leader"

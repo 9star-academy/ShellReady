@@ -1,5 +1,15 @@
 # ShellReady 首版验证记录
 
+## 2026-10-28：compinit 权限确认阻塞修复
+
+用户再次提供的 Actions 日志对应提交 `edaef88`：安装矩阵和静态检查通过，200 项 Python 测试在 229.447 秒后出现 12 处失败。上轮增加的超时终端输出明确显示，所有失败都停在 `zsh compinit: insecure directories` 和 `Ignore insecure directories and continue [y] or abort compinit [n]?`。终端同步修复没有消除补全初始化等待确认的问题。
+
+`config/init.zsh` 将 `compinit` 改为 `compinit -i`。按 [Zsh 5.9 官方实现](https://github.com/zsh-users/zsh/blob/zsh-5.9/Completion/compinit)，该选项仍运行 compaudit，并自动排除检测出的不安全目录/文件，避免启动中等待 y/n。安全目录中的补全和其他工具继续初始化；保留现有目录权限、配置和缓存管理方式。
+
+先新增真实 PTY 回归：在隔离 HOME 中加入正常补全目录和一个权限 0777 的补全目录。旧代码在本机复现与 Actions 完全相同的确认提示，17.049 秒后超时失败。修复后该回归 2.240 秒通过；确认能自动进入 Zsh，正常补全已注册，不安全目录的补全未注册，目录权限仍为 0777，无确认提示。
+
+`python3 -m unittest discover -s tests -v` 实际 **201 项全部通过，无跳过**（92.184 秒）；`PATH=/private/tmp/shellready-validation-20261026/shellcheck-v0.9.0:$PATH bash tests/check.sh` 通过。未增加依赖、修改工作流、放宽超时或跳过测试。本机为 macOS，更新后的 Ubuntu Actions 和真实 SSH 仍需推送后验证；本次未提交、未推送。
+
 ## 2026-10-28：Actions 交互 Zsh 测试超时修复
 
 用户提供的 Actions 日志显示：`bash tests/check.sh` 通过，10 个 Linux 安装矩阵任务通过；`python3 -m unittest discover -s tests -v` 执行 198 项，217.215 秒后以 11 处错误退出。错误集中在两份新增交互测试的 `process.wait` 超时，不是下载、安装矩阵或 ShellCheck 失败。
