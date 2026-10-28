@@ -205,7 +205,7 @@ menu_draw() {
         menu_item 11 '更新 ShellReady' '[需联网]'
         menu_item 0 '退出' '' "$MENU_MUTED"
         menu_separator
-        menu_line '状态来自安装/启停记录；终端功能需重新连接 SSH 验证。' "$MENU_MUTED"
+        menu_line '状态来自安装/启停记录；终端功能请在 Zsh 中验证。' "$MENU_MUTED"
     else
         menu_line 'ShellReady / BBR 网络管理' "$MENU_ACCENT"
         menu_line "TCP 算法：${MENU_TCP:-不可读取}    默认队列：${MENU_QDISC:-不可读取}"
@@ -337,8 +337,22 @@ menu_action() {
 menu_run() {
     local rc=0
     menu_action "$@" || rc=$?
+    if [[ "$rc" != 0 ]]; then
+        case "$1:${3:-}" in
+            install:|update:|repair:|component:install) MENU_SHELL_READY=0 ;;
+        esac
+    fi
     case "$rc" in
-        0) ;;
+        0)
+            case "$1:${3:-}" in
+                install:|update:|repair:|component:install)
+                    if [[ "$KEEP_SHELL" == 0 && -t 0 && -t 1 ]]; then
+                        if [[ "${MENU_SHELL_READY:-0}" != 1 ]]; then
+                            log '退出总菜单后会自动进入 Zsh，无需重新连接 SSH。'
+                        fi
+                        MENU_SHELL_READY=1
+                    fi ;;
+            esac ;;
         2) log '部分操作已跳过或待验证，详情见上方。' ;;
         *) log "操作失败（退出码 ${rc}），可修复原因后重试。" ;;
     esac
@@ -418,6 +432,7 @@ bbr_menu() {
 
 main_menu() {
     local choice update_rc
+    MENU_SHELL_READY=0
     while :; do
         menu_choose main || return 0
         choice=$MENU_CHOICE
@@ -434,15 +449,15 @@ main_menu() {
             10)
                 if menu_confirm '卸载 ShellReady？保留历史、配置备份和全机 BBR/内核'; then
                     # The installed menu's own source may have been removed.
-                    if menu_action uninstall; then return 0; else log '卸载失败，请查看上方原因。'; fi
+                    if menu_action uninstall; then MENU_SHELL_READY=0; return 0; else log '卸载失败，请查看上方原因。'; fi
                 fi ;;
             11)
                 if menu_confirm '从项目 main 更新 ShellReady 并修复已装组件？保留历史/停用状态，不处理 BBR、内核或登录 Shell'; then
                     update_rc=0
                     menu_action self-update || update_rc=$?
                     case "$update_rc" in
-                        0) log '更新完成；已退出旧菜单，请输入 shellready 打开新版。'; return 0 ;;
-                        2) log '更新存在跳过或待验证项，请检查上方结果；已退出旧菜单，可输入 shellready 重新检查。'; return 0 ;;
+                        0) MENU_SHELL_READY=0; log '更新完成；已退出旧菜单，请输入 shellready 打开新版。'; return 0 ;;
+                        2) MENU_SHELL_READY=0; log '更新存在跳过或待验证项，请检查上方结果；已退出旧菜单，可输入 shellready 重新检查。'; return 0 ;;
                         *) log "更新失败（退出码 ${update_rc}），请查看上方原因，可修复后重试。" ;;
                     esac
                 fi ;;

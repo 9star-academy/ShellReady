@@ -79,6 +79,55 @@ add_shell_block "$HOME/.zshrc"
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("接入段损坏", result.stderr)
 
+    @unittest.skipUnless(shutil.which("zsh"), "zsh unavailable")
+    def test_install_switches_bash_and_verifies_account_record(self):
+        result = self.assert_success('''
+KEEP_SHELL=0
+grep() { command grep "$@" || [[ "$*" == '-qxF /bin/zsh /etc/shells' ]]; }
+getent() { printf 'fixture:x:123:123::%s:%s\\n' "$HOME" "$(cat "$WORK/login-shell")"; }
+chsh() { printf '%s\\n' "$*" >> "$WORK/chsh-calls"; printf /usr/bin/zsh > "$WORK/login-shell"; }
+printf /bin/bash > "$WORK/login-shell"
+install_shell
+LOGIN_SHELL=/usr/bin/zsh
+install_shell
+[[ $(cat "$WORK/chsh-calls") == "-s /bin/zsh $TARGET_USER" ]]
+[[ $(cat "$STATE/original-shell") == /bin/bash ]]
+''')
+        self.assertIn("登录 Shell 已核验", result.stdout)
+
+    @unittest.skipUnless(shutil.which("zsh"), "zsh unavailable")
+    def test_install_rejects_successful_chsh_without_account_change(self):
+        result = self.bash('''
+KEEP_SHELL=0
+grep() { return 0; }
+getent() { printf 'fixture:x:123:123::%s:/bin/bash\\n' "$HOME"; }
+chsh() { return 0; }
+install_shell
+''')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("登录 Shell 未切换成功", result.stderr)
+        self.assertNotIn("登录 Shell 已核验", result.stdout)
+
+    @unittest.skipUnless(shutil.which("zsh"), "zsh unavailable")
+    def test_install_does_not_mask_chsh_failure_when_called_in_condition(self):
+        result = self.bash('''
+KEEP_SHELL=0
+grep() { return 0; }
+chsh() { return 42; }
+if install_shell; then exit 99; fi
+''')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("修改登录 Shell 失败", result.stderr)
+
+    @unittest.skipUnless(shutil.which("zsh"), "zsh unavailable")
+    def test_keep_shell_does_not_change_or_recheck_account(self):
+        result = self.assert_success('''
+chsh() { echo unexpected-chsh >&2; return 99; }
+getent() { echo unexpected-getent >&2; return 99; }
+install_shell
+''')
+        self.assertIn("--keep-shell", result.stdout)
+
     def test_uninstall_restores_shell_with_usr_bin_zsh_alias(self):
         # getent, /etc/shells lookup and chsh are stubs; never change an account.
         self.assert_success('''

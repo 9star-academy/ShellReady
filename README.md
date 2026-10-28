@@ -26,7 +26,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/mai
 
 普通用户运行时会按需调用 sudo，为原用户配置。以 root 为其他用户安装时，在命令末尾加上 `--user ubuntu`（替换为实际用户名）。也可以追加 `--keep-shell` 或 `--skip-bbr`。
 
-安装完成后重新连接 SSH，即可使用增强后的 Shell；默认无需重启服务器。后续通过 `shellready status` 查看状态。
+交互终端安装成功后自动进入配置好的 Zsh，无需手动输入 `zsh` 或重新连接 SSH；默认无需重启服务器。后续通过 `shellready status` 查看状态。
 
 默认安装只启用当前内核已有的 BBR。结束时会说明可选 BBRv3 的潜在收益与升级代价；需要升级的用户再单独执行命令，不会在一键安装中弹出选择菜单或自动更换内核。详见 [BBR 与可选 BBRv3](#bbr-与可选-bbrv3)。
 
@@ -48,7 +48,7 @@ bash install.sh menu
 bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/main/bootstrap.sh) menu
 ```
 
-安装后重新连接 SSH，输入 `shellready` 或 `shellready menu` 打开总菜单。已有旧版安装时，用新版完整源码运行 `bash install.sh repair` 更新本地管理入口；它只修复已有组件，不补装已卸载的工具。`shellready install` 继续直接全量安装。
+安装成功自动进入 Zsh 后，输入 `shellready` 或 `shellready menu` 打开总菜单。已有旧版安装时，用新版完整源码运行 `bash install.sh repair` 更新本地管理入口；它只修复已有组件，不补装已卸载的工具。`shellready install` 继续直接全量安装。
 
 ```text
 ShellReady 管理菜单
@@ -74,7 +74,7 @@ ShellReady 管理菜单
 
 窗口缩小时仍可退格修改已经输入的数字，仅更新输入行；放大后恢复方向键高亮。菜单返回、退出、EOF、Ctrl+C 或 SIGTERM 会恢复进入读键前的终端输入模式，具体安装/卸载操作继续使用原有独立命令和确认规则。
 
-状态列读取实际安装收据、工具入口和停用标记，区分已启用、已停用、未安装和待修复；“已启用”表示安装与启停记录正常，Shell 加载仍需重新连接 SSH 验证。BBR 概览读取当前 TCP 算法、默认队列、运行内核及已加载模块版本；算法名 `bbr` 不等同于 BBRv3，默认队列也不等同于实际出口队列，详细核验仍选择“查看状态”。浏览和移动选中行不执行工具、不更改网络配置。
+状态列读取实际安装收据、工具入口和停用标记，区分已启用、已停用、未安装和待修复；“已启用”表示安装与启停记录正常，实际加载效果请在配置后的 Zsh 中验证。BBR 概览读取当前 TCP 算法、默认队列、运行内核及已加载模块版本；算法名 `bbr` 不等同于 BBRv3，默认队列也不等同于实际出口队列，详细核验仍选择“查看状态”。浏览和移动选中行不执行工具、不更改网络配置。
 
 五个终端工具分别提供安装/修复、启用、停用和卸载。单项安装会准备共享的 Zsh 环境，但不安装其他工具或修改 BBR；可传 `--keep-shell` 保持登录 Shell。停用保留工具和数据，单项卸载保留配置、Atuin/zoxide 历史、其他组件与管理入口。重新连接 SSH 后验证终端变化。trzsz 停用仅移除本项目的 `trz`/`tsz` 入口，不移除系统中原有的同名工具。
 
@@ -118,7 +118,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/mai
 | [Atuin](https://github.com/atuinsh/atuin) | 本机命令历史与搜索 | Ctrl+R 搜索历史，保留原方向键行为 |
 | [zoxide](https://github.com/ajeetdsouza/zoxide) | 智能目录跳转 | 访问目录后，使用 z 关键词跳转 |
 
-包含 Zsh、补全和持久配置，默认将目标用户的登录 Shell 设置为 `/bin/zsh`。可以通过 `--keep-shell` 保留原登录 Shell，再手动运行 `zsh`。已有 Oh My Zsh 等配置会保留，但其快捷键和提示符可能与本项目配置互相覆盖，应在测试环境检查。
+包含 Zsh、补全和持久配置，默认将目标用户的登录 Shell 设置为 `/bin/zsh` 并核验结果。交互终端安装成功后自动以目标用户进入 Zsh，菜单安装则在退出总菜单后进入。可以通过 `--keep-shell` 保留原登录 Shell 和当前会话，再手动运行 `zsh`。已有 Oh My Zsh 等配置会保留，但其快捷键和提示符可能与本项目配置互相覆盖，应在测试环境检查。
 
 工具使用官方预编译程序，不要求服务器安装 Go 或 Rust。固定版本与 SHA-256 见 [产物清单](config/assets.tsv)：trzsz-go 1.2.0、Starship 1.26.0、zsh-autosuggestions 0.7.1、Atuin 18.22.0、zoxide 0.10.0。
 
@@ -161,7 +161,14 @@ bash install.sh --skip-bbr
 bash install.sh --help
 ```
 
-安装后重新连接 SSH。使用 `--keep-shell` 时，手动运行 `zsh` 后才会加载这些增强功能。默认 BBR 操作不要求重启整台服务器。
+在交互终端中，安装、`update`、`repair` 或单项安装全部成功后会自动进入目标用户的 Zsh，无需重新连接 SSH。通过菜单安装/修复时，先继续使用菜单，退出总菜单后再自动进入。进入前会提示：
+
+```text
+正在进入 <用户名> 的 Zsh，无需重新连接 SSH。
+输入 exit 会返回原来的终端；以后登录会自动使用 Zsh。
+```
+
+这是当前连接中新打开的 Zsh，输入 `exit` 后会提示已返回原来的终端。使用 `--keep-shell`、非终端输入输出、安装失败或部分跳过时不自动进入；使用 `--keep-shell` 时，需手动运行 `zsh` 才会加载增强功能。只读检查、卸载和菜单 11 在线更新也不会自动打开 Shell。默认 BBR 操作不要求重启整台服务器。
 
 ## 状态、修复与卸载
 
@@ -253,7 +260,7 @@ FQ 操作会改变默认路由出口的实际队列，可能短暂影响正在�
 
 系统最低要求为 **Ubuntu 24.04 及以上、Debian 12 及以上**，包括 Ubuntu 26.04。要求 `update-grub`、`grub-script-check`、`systemd-detect-virt`，当前内核和 initramfs 文件及匹配的 GRUB 启动项，以及 `/boot` 所在分区至少 1 GiB 可用空间。UEFI 环境还需 `mokutil`，且必须确认 Secure Boot 关闭。其他引导方式不自动处理。
 
-基础安装完成并重新连接 SSH 后，在 Releases 页面选择与服务器架构对应的标准 tag：x86_64 使用 `x86_64-X.Y.Z`，ARM64 使用 `arm64-X.Y.Z`，不带 `-max`。然后执行（占位符需要替换，不接受 `latest`）：
+基础安装完成并进入配置后的 Zsh 后，在 Releases 页面选择与服务器架构对应的标准 tag：x86_64 使用 `x86_64-X.Y.Z`，ARM64 使用 `arm64-X.Y.Z`，不带 `-max`。然后执行（占位符需要替换，不接受 `latest`）：
 
 ```bash
 shellready bbrv3 --tag '<标准版 release tag>' --yes

@@ -44,7 +44,7 @@ ShellReady — 新服务器，一键配顺手
   kernel-remove       移除 ShellReady 记录的非运行内核，需要 --tag
 
   --user NAME         目标用户；默认 sudo 原用户或当前用户
-  --keep-shell        不修改登录 Shell，安装后手动运行 zsh
+  --keep-shell        保留登录 Shell 和当前会话，安装后手动运行 zsh
   --skip-bbr          跳过系统 BBR 配置（例如普通容器测试）
   --restore-bbr       仅用于 uninstall，恢复全机 BBR 原配置
   --tag RELEASE       指定 byJoey/Actions-bbr-v3 标准 release tag
@@ -105,7 +105,10 @@ check_platform
 resolve_user
 # Reading a menu/status must not require root, take the mutation lock or install packages.
 case "$ACTION" in
-    menu) main_menu; exit 0 ;;
+    menu)
+        main_menu
+        if [[ "${MENU_SHELL_READY:-0}" == 1 ]]; then start_zsh_session; fi
+        exit 0 ;;
     bbr-menu) bbr_menu; exit 0 ;;
     # New snapshot's repair owns elevation/locking; do not hold an outer lock.
     self-update) self_update; exit $? ;;
@@ -169,7 +172,10 @@ status_shell() {
         log 'Zsh 接入段缺失或无效；运行 update 修复，标记损坏时需先手动整理。'; return 2
     fi
     [[ -f "$PREFIX/config/init.zsh" ]] || { log 'Shell 初始化文件不存在'; return 2; }
-    log "Zsh 接入段存在；登录 Shell：${LOGIN_SHELL}。交互效果需重新连接验证。"
+    case "$LOGIN_SHELL" in
+        /bin/zsh|/usr/bin/zsh) log "Zsh 接入段存在；登录 Shell：${LOGIN_SHELL}。当前会话效果需在 Zsh 中验证。" ;;
+        *) log "Zsh 配置存在，但登录 Shell 仍为 ${LOGIN_SHELL}；运行 shellready repair 切换，或按保留原 Shell 的选择手动运行 zsh。"; return 2 ;;
+    esac
 }
 
 case "$ACTION" in
@@ -250,3 +256,10 @@ fi
 if ((FAILED)); then log "存在 $FAILED 项失败，修复原因后重跑。"; exit 1; fi
 if ((SKIPPED)); then log "存在 $SKIPPED 项跳过或待验证，未标记为全部完成。"; exit 2; fi
 log '操作完成。'
+case "$ACTION:$OPERATION" in
+    install:|update:|repair:|component:install)
+        cleanup
+        WORK=''
+        exec 9>&-
+        start_zsh_session ;;
+esac

@@ -1,5 +1,25 @@
 # ShellReady 首版验证记录
 
+## 2026-10-26：安装后自动进入 Zsh 与用户提示
+
+按用户确认的方案，交互终端的安装、update、repair 和单项安装全部成功后，先清理安装临时目录并关闭变更锁描述符，再通过现有 `as_user` 以目标用户启动交互登录 Zsh。菜单中的安装子进程仍使用 `/dev/null` 输入，不读取后续菜单选项；成功后提示“退出总菜单后会自动进入 Zsh”，退出菜单时再进入。后续安装/修复失败、卸载成功或在线自更新退出时取消待进入状态。
+
+进入前明确提示“正在进入 <用户> 的 Zsh，无需重新连接 SSH”和“输入 exit 会返回原来的终端；以后登录会自动使用 Zsh”；会话退出后提示已返回原来的终端。保留 `--keep-shell`，非终端输入/输出、失败/部分跳过、只读检查和在线自更新不自动启动。Zsh 会话退出码不会改写先前安装成功的结果。
+
+同时补齐登录 Shell 核验：`chsh` 后重新读取用户记录；命令失败或账户仍为 Bash 都报告失败。`status` 在配置存在但登录 Shell 为 Bash 时返回 2。先补测试复现旧行为，再实现；还复现并修复了菜单先成功、后重试失败仍会进入 Zsh 的情况。
+
+实际验证：
+
+- `python3 -m unittest discover -s tests -v`：**198 项通过，无跳过**，耗时 88.807 秒（原有 176 项，本轮新增 22 项）。
+- `PATH=/private/tmp/shellready-validation-20261026/shellcheck-v0.9.0:$PATH bash tests/check.sh`：Bash/Zsh 语法、ShellCheck 0.9.0、测试忽略规则和空白检查通过；工具从官方发布下载到临时目录，未新增项目或系统依赖。
+- `bash install.sh --help`、`git diff --check` 通过。
+- 使用真实 Zsh 和 PTY 覆盖本地安装、远程 bootstrap 的本地 HTTP 替身、已安装管理器、菜单及单项安装、update/repair、提示、会话退出、变更锁描述符与临时文件清理。覆盖目标用户切换参数；OS 用户/包/网络操作使用替身，不修改本机账户。
+- 用临时 `BASH_ENV` 的 DEBUG trap 对本轮 Shell 相关 28 项测试记录执行行，全部通过；`start_zsh_session` 的可执行行覆盖 **15/15（100%）**。该指标仅针对新增函数，不代表全项目或分支覆盖率。
+
+服务器验收：从 Bash 运行新版 `bash install.sh --skip-bbr`，预期无需输入其他命令即可进入 Zsh；运行 `ps -p $$ -o comm=` 应显示 zsh，`getent passwd "$(id -un)" | cut -d: -f7` 应为 `/bin/zsh` 或 `/usr/bin/zsh`。输入 `exit` 后应提示返回原终端；重新 SSH 登录应默认进入 Zsh。另用普通 sudo 用户确认实际用户身份、终端控制和配置归属。
+
+本轮未执行真实 Linux apt/chsh/runuser 或 SSH 登录验收，未提交、未推送，远端 CI 尚未运行。
+
 ## 2026-10-20：GitHub Actions SC2015 兼容性修复
 
 用户截图显示 static 在 `bash tests/check.sh` 的 ShellCheck 阶段失败，定位到 `install.sh:83` 与 `modules/kernel.sh:124` 的 `A && B || C` 条件；Python 步骤未运行，截图中的安装矩阵均为成功。此前本地使用 ShellCheck 0.11.0 未报告这两处，不能据此认定远端静态检查已通过。

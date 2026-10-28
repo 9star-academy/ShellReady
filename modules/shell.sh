@@ -64,7 +64,7 @@ add_shell_block() {
 }
 
 install_shell() {
-    local resolved
+    local resolved current
     # Respect ZDOTDIR rather than silently updating a file Zsh will never load.
     # Expand HOME/ZDOTDIR inside the target user shell.
     # shellcheck disable=SC2016
@@ -95,15 +95,48 @@ install_shell() {
         as_user touch "$STATE/history-imported"
     fi
     add_shell_block "$TARGET_HOME/.zshrc"
-    if [[ "$KEEP_SHELL" == 0 && "$LOGIN_SHELL" != /bin/zsh && "$LOGIN_SHELL" != /usr/bin/zsh ]]; then
+    if [[ "$KEEP_SHELL" == 1 ]]; then
+        log '已按 --keep-shell 保留登录 Shell 和当前会话；需要使用增强功能时可手动运行 zsh。'
+        return 0
+    fi
+    if [[ "$LOGIN_SHELL" != /bin/zsh && "$LOGIN_SHELL" != /usr/bin/zsh ]]; then
         grep -qxF /bin/zsh /etc/shells || { fail '/bin/zsh 未列入 /etc/shells'; return 1; }
         if [[ ! -f "$STATE/original-shell" ]]; then
             printf '%s\n' "$LOGIN_SHELL" > "$WORK/original-shell"
             user_write "$STATE/original-shell" "$WORK/original-shell"
         fi
-        chsh -s /bin/zsh "$TARGET_USER"
-        log '已设为 Zsh；重新连接 SSH 后生效。'
+        chsh -s /bin/zsh "$TARGET_USER" || { fail '修改登录 Shell 失败，请检查权限后重试。'; return 1; }
     fi
+    current=$(getent passwd "$TARGET_USER" | cut -d: -f7) || { fail '无法读取登录 Shell，未确认切换成功。'; return 1; }
+    case "$current" in
+        /bin/zsh|/usr/bin/zsh) log "登录 Shell 已核验：${current}；以后登录自动使用 Zsh。" ;;
+        *) fail "登录 Shell 未切换成功，当前为：${current}。"; return 1 ;;
+    esac
+}
+
+# Called only after a successful install/repair, outside its lock and scratch dir.
+# Menus leave child stdin closed and defer this to the top-level menu's exit.
+start_zsh_session() {
+    local current rc=0
+    [[ "$KEEP_SHELL" == 0 ]] || return 0
+    if [[ ! -t 0 || ! -t 1 ]]; then
+        log '当前不是交互终端，未自动进入 Zsh；下次登录会使用已设置的登录 Shell。'
+        return 0
+    fi
+    if [[ ! -f "$PREFIX/config/init.zsh" ]] || ! shell_block_is_current "$TARGET_HOME/.zshrc"; then
+        log 'Zsh 配置尚未就绪，未自动进入；请运行 shellready repair 检查修复。'
+        return 0
+    fi
+    current=$(getent passwd "$TARGET_USER" | cut -d: -f7) || current=''
+    case "$current" in
+        /bin/zsh|/usr/bin/zsh) ;;
+        *) log '登录 Shell 尚未确认为 Zsh，未自动进入；请运行 shellready repair 检查修复。'; return 0 ;;
+    esac
+    log "正在进入 ${TARGET_USER} 的 Zsh，无需重新连接 SSH。"
+    log '输入 exit 会返回原来的终端；以后登录会自动使用 Zsh。'
+    as_user env SHELL="$current" "$current" -il || rc=$?
+    if [[ "$rc" != 0 ]]; then log "Zsh 会话已结束（退出码 ${rc}），安装结果不变。"; fi
+    log '已返回原来的终端；再次使用 Zsh 可运行 zsh，或重新连接 SSH。'
 }
 
 uninstall_shell() {

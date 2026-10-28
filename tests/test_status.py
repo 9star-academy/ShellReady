@@ -10,6 +10,25 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class StatusTests(unittest.TestCase):
+    def test_valid_zsh_files_do_not_hide_a_bash_login_shell(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            script = r'''set -euo pipefail
+source "$ROOT/lib/common.sh"
+source "$ROOT/modules/shell.sh"
+TARGET_HOME="$TEST_HOME"; PREFIX="$TARGET_HOME/prefix"
+LOGIN_SHELL=/bin/bash
+mkdir -p "$PREFIX/config"
+shell_block > "$TARGET_HOME/.zshrc"
+printf '# fixture\n' > "$PREFIX/config/init.zsh"
+eval "$(sed -n '/^status_shell() {/,/^}/p' "$ROOT/install.sh")"
+status_shell
+'''
+            result = subprocess.run(['bash', '-c', script], capture_output=True, text=True,
+                                    env={**os.environ, 'ROOT': str(ROOT), 'TEST_HOME': tmp})
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn('登录 Shell 仍为 /bin/bash', result.stdout)
+            self.assertIn('shellready repair', result.stdout)
+
     def test_status_rejects_empty_shell_block_without_changing_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp)

@@ -57,6 +57,7 @@ resolve_user() {
     QDISC_STATE="$TEST_WORK/qdisc"; QDISC_FILE="$TEST_WORK/sysctl.d/90-shellready-fq.conf"
     KERNEL_STATE="$TEST_WORK/kernels"
 }
+getent() { printf '%s:x:123:123::%s:/bin/zsh\n' "$TARGET_USER" "$TARGET_HOME"; }
 as_user() { env HOME="$TARGET_HOME" "$@"; }
 dpkg-query() { echo 'install ok installed'; }
 sha256sum() { shasum -a 256 "$@"; }
@@ -136,11 +137,15 @@ sysctl() {
                                            env={**self.env, 'TERM': 'xterm-256color',
                                                 'COLORTERM': 'truecolor'})
                 output = b''
+                sent_exit = False
                 deadline = time.monotonic() + 15
                 try:
                     while time.monotonic() < deadline:
                         if select.select([master], [], [], 0.05)[0]:
                             output += os.read(master, 65536)
+                            if not sent_exit and '正在进入'.encode() in output:
+                                os.write(master, b'exit\n')
+                                sent_exit = True
                         elif process.poll() is not None:
                             break
                     process.wait(timeout=1)
@@ -151,7 +156,9 @@ sysctl() {
                     process.wait(timeout=4)
                     os.close(master)
                     os.close(slave)
-                self.assertNotIn('\x1b', output.decode())
+                installer_output = output.decode().split('正在进入', 1)[0]
+                self.assertNotIn('\x1b', installer_output)
+                self.assertTrue(sent_exit, output.decode())
                 self.assertNotIn('请选择', output.decode())
                 self.assertFalse((self.work / 'menu-calls').exists())
                 self.assertEqual((self.work / 'algo').read_text(), 'bbr')
