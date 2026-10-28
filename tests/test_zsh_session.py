@@ -29,7 +29,7 @@ class ZshSessionTests(unittest.TestCase):
             common.write(r'''
 getent() { printf '%s:x:123:123::%s:/bin/zsh\n' "$TARGET_USER" "$TARGET_HOME"; }
 as_user() {
-    if [[ "$1" == env && "${2:-}" == SHELL=* && "${3:-}" == /bin/zsh && "${4:-}" == -il ]]; then
+    if [[ "$1" == env && "${2:-}" == SHELL=* && "${3:-}" == skip_global_compinit=1 && "${4:-}" == /bin/zsh && "${5:-}" == -il ]]; then
         if (: >&9) 2>/dev/null; then echo lock-inherited >&2; return 99; fi
         printf '%s\n' "$TARGET_USER:$*" >> "$TEST_WORK/session-calls"
     fi
@@ -99,7 +99,7 @@ as_user() {
         self.assertIn('已返回原来的终端', output)
         self.assertNotIn('lock-inherited', output)
         calls = (self.work / 'session-calls').read_text().splitlines()
-        self.assertEqual(calls, ['fixture-user:env SHELL=/bin/zsh /bin/zsh -il'])
+        self.assertEqual(calls, ['fixture-user:env SHELL=/bin/zsh skip_global_compinit=1 /bin/zsh -il'])
 
     def test_startup_input_flush_does_not_swallow_session_commands(self):
         self.seed_all()
@@ -114,7 +114,7 @@ termios.tcflush(0, termios.TCIFLUSH)'
         self.assertEqual(rc, 0, output)
         self.assertIn('ACTIVE:', output)
 
-    def test_insecure_completion_directory_is_excluded_without_prompting(self):
+    def prepare_completion_directories(self):
         self.seed_all()
         safe = self.work / 'safe-completions'
         unsafe = self.work / 'unsafe-completions'
@@ -127,6 +127,29 @@ termios.tcflush(0, termios.TCIFLUSH)'
             rc_file.write('fpath=("$TEST_WORK/safe-completions" "$TEST_WORK/unsafe-completions" $fpath)\n')
         (self.home / '.zlogin').write_text('''if [[ -o interactive ]]; then
     print -r -- "COMPLETIONS:${_comps[shellready-safe]:-missing}:${_comps[shellready-unsafe]:-missing}"
+fi
+''')
+        return unsafe
+
+    def test_insecure_completion_directory_is_excluded_without_prompting(self):
+        unsafe = self.prepare_completion_directories()
+        rc, output = self.terminal('--skip-bbr')
+        self.assertEqual(rc, 0, output)
+        self.assertIn('COMPLETIONS:_shellready_safe:missing', output)
+        self.assertNotIn('Ignore insecure', output)
+        self.assertEqual(unsafe.stat().st_mode & 0o777, 0o777)
+
+    def test_ubuntu_global_compinit_is_deferred_before_user_zshrc(self):
+        unsafe = self.prepare_completion_directories()
+        self.fixture.env.pop('skip_global_compinit', None)
+        # Ubuntu's /etc/zsh/zshrc calls compinit before the user's .zshrc.
+        # Reproduce that order in a temporary startup file on either OS.
+        (self.home / '.zshenv').write_text('''if [[ -o interactive ]]; then
+    fpath=("$TEST_WORK/unsafe-completions" $fpath)
+    if [[ -z ${skip_global_compinit:-} ]]; then
+        autoload -U compinit
+        compinit
+    fi
 fi
 ''')
         rc, output = self.terminal('--skip-bbr')
@@ -248,7 +271,7 @@ runuser() {
         self.assertIn('ACTIVE:fixture-user:/bin/zsh:1', output)
         calls = (self.work / 'runuser-calls').read_text().splitlines()
         self.assertTrue(any(line.startswith('-u fixture-user -- env ') and
-                            line.endswith('env SHELL=/bin/zsh /bin/zsh -il') for line in calls), calls)
+                            line.endswith('env SHELL=/bin/zsh skip_global_compinit=1 /bin/zsh -il') for line in calls), calls)
 
     def test_skipped_bbr_keeps_partial_exit_without_entering_zsh(self):
         self.seed_all()

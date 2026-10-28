@@ -82,7 +82,7 @@ Zsh 是 zsh-autosuggestions 的依赖，应纳入依赖处理，不算额外的�
 - BBR 子菜单包含实际队列检查、独立启用、可选 FQ、标准版内核选择、网络恢复和非运行内核移除。FQ 仅主动确认后执行，保留 mq 根结构，未知/自定义队列保留并跳过；不加入区域、智能或极限调优。
 - 基础安装允许 Ubuntu 22.04 或 Ubuntu 24.04 及以上、Debian 12 及以上，x86_64/ARM64。按可识别的数字 VERSION_ID 比较，不自动推断衍生系统或无版本号的 testing/unstable。较新版本通过入口检查不等于完成实机验证。
 - 默认为目标用户设置 /bin/zsh 并重新读取账户记录核验，提供 --keep-shell；普通用户调用 sudo 后仍以原用户为目标。交互终端安装/update/repair/单项安装全部成功后，清理临时文件并释放变更锁，再以目标用户自动进入 Zsh；菜单在退出总菜单后进入。提示无需重连、exit 返回原终端、以后登录默认 Zsh。--keep-shell、非终端、失败/部分跳过、只读/卸载/self-update 不启动会话；status 不能将 Bash 登录 Shell 报为已就绪。
-- 配置使用标准 HOME/.zshrc；符号链接配置或自定义 ZDOTDIR 不自动修改。保留现有配置和主题文件。补全初始化使用 compinit -i，保留权限检查并排除不安全目录，避免自动进入 Zsh 时停在 y/n 确认；不自动修改补全目录权限。
+- 配置使用标准 HOME/.zshrc；符号链接配置或自定义 ZDOTDIR 不自动修改。保留现有配置和主题文件。补全初始化使用 compinit -i，保留权限检查并排除不安全目录。自动进入前通过 env 传入 skip_global_compinit=1，避免 Ubuntu 在用户 .zshrc 之前重复初始化并等待 y/n；该设置限于启动环境，不自动修改补全目录权限。
 - 工具装入目标用户 ~/.local/share/shellready，提供本地 shellready 管理命令；固定清单见 config/assets.tsv。
 - update 按当前清单修复或安装；不会自动拉取上游 latest，变更清单需使用新版仓库。
 - 总菜单 11「更新 ShellReady」对应独立 self-update，获取本项目 main 的完整固定 commit 快照，再 repair 已有组件；保留历史、停用状态，不补装已卸载工具，固定 --skip-bbr --keep-shell 并传递目标用户。下载不持有外层锁，由新版修复进程负责提权与加锁；成功/部分完成后退出旧菜单。旧 update/默认一键安装含义不变，旧 10 卸载编号不变。

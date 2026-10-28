@@ -134,7 +134,9 @@ start_zsh_session() {
     esac
     log "正在进入 ${TARGET_USER} 的 Zsh，无需重新连接 SSH。"
     log '输入 exit 会返回原来的终端；以后登录会自动使用 Zsh。'
-    as_user env SHELL="$current" "$current" -il || rc=$?
+    # Ubuntu's global zshrc runs compinit before our .zshrc. Defer that call
+    # so ShellReady can initialize completion with its checked -i policy.
+    as_user env SHELL="$current" skip_global_compinit=1 "$current" -il || rc=$?
     if [[ "$rc" != 0 ]]; then log "Zsh 会话已结束（退出码 ${rc}），安装结果不变。"; fi
     log '已返回原来的终端；再次使用 Zsh 可运行 zsh，或重新连接 SSH。'
 }

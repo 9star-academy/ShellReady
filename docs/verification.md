@@ -1,5 +1,17 @@
 # ShellReady 首版验证记录
 
+## 2026-10-28：Ubuntu 系统级 compinit 提前执行修复
+
+再次提供的 Actions 日志对应提交 `f039cef`，201 项测试在 252.827 秒后出现 13 处失败，仍停在 compinit 的权限确认提示。已核实该提交包含项目初始化中的 `compinit -i`，因此不是旧源码或修复未提交。
+
+根据 [发行版 zshrc 源码](https://sources.debian.org/src/zsh/5.9-8/debian/zshrc/)，Ubuntu 在系统级 `/etc/zsh/zshrc` 中会先调用普通 `compinit`，随后才加载用户 `.zshrc`；设置 `skip_global_compinit` 可以跳过此处的重复初始化。前一轮仅调整项目配置，执行时机晚于系统级确认，未覆盖这一差异。
+
+`start_zsh_session` 通过目标用户的 `env` 在启动 Zsh 之前设置 `skip_global_compinit=1`，由项目中的 `compinit -i` 完成保留权限检查的补全初始化。标记仅通过本次启动环境传递，不写入系统配置或用户 `.zshenv`。
+
+新增回归在隔离启动文件中模拟 Ubuntu 的前置调用，令不安全补全目录在用户 `.zshrc` 之前进入 fpath。修改前本机复现同样的 y/n 提示并在 17.071 秒后失败；修改后可以进入 Zsh，正常目录的补全已注册，不安全目录的补全未注册，目录权限保持不变。定向验证该回归、直接安装和 sudo 用户启动共 3 项通过（6.568 秒）；ShellCheck 0.9.0、Bash/Zsh 语法和空白检查通过。
+
+`python3 -m unittest discover -s tests -v` 实际 **202 项全部通过，无跳过**（95.747 秒）。本机仍为 macOS；此次验证模拟 Ubuntu 的启动顺序，不能当作 Ubuntu Actions 已通过。远端 CI 和真实 SSH 仍待推送后确认；本次未提交、未推送。
+
 ## 2026-10-28：compinit 权限确认阻塞修复
 
 用户再次提供的 Actions 日志对应提交 `edaef88`：安装矩阵和静态检查通过，200 项 Python 测试在 229.447 秒后出现 12 处失败。上轮增加的超时终端输出明确显示，所有失败都停在 `zsh compinit: insecure directories` 和 `Ignore insecure directories and continue [y] or abort compinit [n]?`。终端同步修复没有消除补全初始化等待确认的问题。
