@@ -1,6 +1,9 @@
 """Reuse the existing isolated CLI boundary to test new dispatch routes."""
 import unittest
+import os
+import subprocess
 import test_install_guidance as guidance
+import test_entry_transitions as transitions
 
 
 class ManagementCLITests(unittest.TestCase):
@@ -17,6 +20,41 @@ class ManagementCLITests(unittest.TestCase):
         self.assertEqual((self.fixture.work / 'calls').read_text().splitlines(),
                          ['install_manager', 'tool:atuin', 'install_shell'])
         self.assertEqual((self.fixture.work / 'algo').read_text(), 'cubic')
+
+    def test_sudo_receives_only_explicit_download_configuration(self):
+        entry = self.fixture.repo / 'install.sh'
+        entry.write_text(entry.read_text().replace('if false; then', 'if [[ "$READ_ONLY" == 0 ]]; then', 1))
+        sudo = self.fixture.work / 'bin/sudo'
+        sudo.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$TEST_WORK/sudo-args"\n')
+        sudo.chmod(0o755)
+        env = {**os.environ, 'PATH': str(sudo.parent) + os.pathsep + os.environ['PATH'],
+               'TEST_WORK': str(self.fixture.work), 'SHELLREADY_DOWNLOAD_MODE': 'cn',
+               'SHELLREADY_GITHUB_MIRROR': 'https://mirror.example/prefix'}
+        result = subprocess.run(['bash', str(entry), '--keep-shell', '--skip-bbr'],
+                                env=env, capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        args = (self.fixture.work / 'sudo-args').read_text().splitlines()
+        self.assertEqual(args[:4], ['env', 'SHELLREADY_DOWNLOAD_MODE=cn',
+                                   'SHELLREADY_GITHUB_MIRROR=https://mirror.example/prefix', 'bash'])
+        self.assertIn('--keep-shell', args)
+        self.assertIn('--skip-bbr', args)
+
+    def test_installed_manager_remembers_cn_but_accepts_explicit_override(self):
+        fixture = transitions.EntryTransitionTests()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        fixture.env.update(SHELLREADY_DOWNLOAD_MODE='cn', SHELLREADY_GITHUB_MIRROR='https://mirror.example')
+        fixture.seed('atuin')
+        fixture.run_cli('component', 'atuin', 'install', '--keep-shell')
+        with (fixture.prefix / 'app/modules/update.sh').open('a') as f:
+            f.write('\nself_update() { echo "CONFIG:$SHELLREADY_DOWNLOAD_MODE:$SHELLREADY_GITHUB_MIRROR"; }\n')
+        fixture.env.pop('SHELLREADY_DOWNLOAD_MODE')
+        fixture.env.pop('SHELLREADY_GITHUB_MIRROR')
+        result = fixture.run_cli('self-update', manager=True)
+        self.assertIn('CONFIG:cn:https://mirror.example', result.stdout)
+        fixture.env['SHELLREADY_DOWNLOAD_MODE'] = 'direct'
+        result = fixture.run_cli('self-update', manager=True)
+        self.assertIn('CONFIG:direct:https://mirror.example', result.stdout)
 
     def test_standalone_bbr_does_not_install_terminal_tools(self):
         result = self.fixture.run_install('bbr-enable')

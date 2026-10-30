@@ -116,6 +116,7 @@ printf '#!/bin/bash\nprintf "ACTION:%%s\\n" "$*"\n' > "$PREFIX/app/install.sh"
             repo = Path(tmp) / 'repo'
             repo.mkdir()
             shutil.copy(ROOT / 'install.sh', repo)
+            shutil.copy(ROOT / 'bootstrap.sh', repo)
             for name in ('lib', 'modules'):
                 shutil.copytree(ROOT / name, repo / name)
             with (repo / 'lib/common.sh').open('a') as f:

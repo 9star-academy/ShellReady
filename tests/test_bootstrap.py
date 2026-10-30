@@ -21,7 +21,7 @@ class BootstrapTests(unittest.TestCase):
         self.metadata = self.work / "commit.json"
         self.metadata.write_text('{\n  "sha": "' + COMMIT + '",\n  "files": []\n}\n')
         entry = b'#!/bin/bash\nprintf "%s\\n" "$@" > "$FIXTURES/args"\nexit "${INSTALL_RC:-0}"\n'
-        with tarfile.open(self.work / "source.tar.gz", "w:gz") as archive:
+        with tarfile.open(self.work / "source.tar.gz", "w:gz", pax_headers={'comment': COMMIT}) as archive:
             info = tarfile.TarInfo("snapshot/install.sh")
             info.size = len(entry)
             archive.addfile(info, io.BytesIO(entry))
@@ -37,11 +37,17 @@ while (($#)); do
     esac
 done
 printf '%s\n' "$url" >> "$FIXTURES/requests"
+if [[ "$url" == https://mirror.example/* ]]; then
+    [[ ${FAIL_FETCH:-} != mirror ]] || exit 22
+    url=${url#https://mirror.example/}
+elif [[ ${BLOCK_ORIGIN:-0} == 1 ]]; then
+    exit 28
+fi
 case "$url" in
     https://api.github.com/*)
         [[ ${FAIL_FETCH:-} != metadata ]] || exit 22
         cp "$FIXTURES/commit.json" "$dest" ;;
-    https://codeload.github.com/*)
+    https://codeload.github.com/*|https://github.com/*/archive/*)
         [[ ${FAIL_FETCH:-} != archive ]] || exit 22
         cp "$FIXTURES/source.tar.gz" "$dest" ;;
     *) exit 99 ;;
@@ -53,7 +59,8 @@ esac
         result = subprocess.run(
             ["bash", "-c", 'bash <(cat "$1") "${@:2}"', "bash", str(ROOT / "bootstrap.sh"), *args],
             env={**os.environ, "PATH": str(self.work / "bin") + os.pathsep + os.environ["PATH"],
-                 "FIXTURES": str(self.work), "TMPDIR": str(self.work / "tmp"), "SHELLREADY_REF": "main", **env},
+                 "FIXTURES": str(self.work), "TMPDIR": str(self.work / "tmp"), "SHELLREADY_REF": "main",
+                 "SHELLREADY_DOWNLOAD_MODE": "direct", "SHELLREADY_GITHUB_MIRROR": "https://mirror.example", **env},
             capture_output=True, text=True, timeout=20,
         )
         self.assertEqual(list((self.work / "tmp").iterdir()), [], "bootstrap temporary files leaked")
@@ -118,6 +125,40 @@ esac
         p = self.run_entry(SHELLREADY_REF="v0.1.0", INSTALL_RC="1")
         self.assertEqual(p.returncode, 1)
         self.assertIn("/commits/v0.1.0", (self.work / "requests").read_text())
+
+    def test_cn_snapshot_does_not_need_commit_api_or_origin(self):
+        p = self.run_entry('--help', SHELLREADY_DOWNLOAD_MODE='cn', BLOCK_ORIGIN='1')
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn(COMMIT, p.stdout)
+        self.assertEqual((self.work / 'args').read_text(), '--help\n')
+        self.assertEqual((self.work / 'requests').read_text().splitlines(),
+                         ['https://mirror.example/https://github.com/9star-academy/ShellReady/archive/main.tar.gz'])
+
+    def test_auto_uses_archive_commit_when_api_is_rate_limited(self):
+        p = self.run_entry(SHELLREADY_DOWNLOAD_MODE='auto', FAIL_FETCH='metadata')
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn(COMMIT, p.stdout)
+
+    def test_cn_ref_archive_without_commit_metadata_is_not_executed(self):
+        with tarfile.open(self.work / 'source.tar.gz', 'w:gz') as archive:
+            info = tarfile.TarInfo('snapshot/install.sh')
+            info.size = 0
+            archive.addfile(info, io.BytesIO(b''))
+        p = self.run_entry(SHELLREADY_DOWNLOAD_MODE='cn')
+        self.assertNotEqual(p.returncode, 0)
+        self.assertFalse((self.work / 'args').exists())
+
+    def test_pinned_commit_needs_no_api(self):
+        p = self.run_entry(SHELLREADY_DOWNLOAD_MODE='cn', SHELLREADY_REF=COMMIT)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertNotIn('/commits/', (self.work / 'requests').read_text())
+        self.assertIn('/archive/' + COMMIT, (self.work / 'requests').read_text())
+
+    def test_wrong_archive_commit_is_not_executed(self):
+        p = self.run_entry(SHELLREADY_DOWNLOAD_MODE='cn', SHELLREADY_REF='b' * 40)
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn('commit 与请求版本不符', p.stderr)
+        self.assertFalse((self.work / 'args').exists())
 
 
 if __name__ == "__main__":

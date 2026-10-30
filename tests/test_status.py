@@ -35,6 +35,7 @@ status_shell
             repo = work / "repo"
             repo.mkdir()
             shutil.copy(ROOT / "install.sh", repo)
+            shutil.copy(ROOT / "bootstrap.sh", repo)
             for name in ("lib", "modules"):
                 shutil.copytree(ROOT / name, repo / name)
             # Only the platform/user boundary is substituted. The CLI dispatcher,

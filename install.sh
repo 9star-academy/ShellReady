@@ -51,6 +51,10 @@ ShellReady — 新服务器，一键配顺手
   --yes               确认内核变更、bbr-fq 或 bbr-restore
   --help              显示帮助
 
+下载环境变量（已安装管理入口会记住安装时的配置，可用环境变量覆盖）：
+  SHELLREADY_DOWNLOAD_MODE   auto（默认，直连失败后镜像）/ cn（镜像优先）/ direct（仅直连）
+  SHELLREADY_GITHUB_MIRROR   HTTPS 镜像前缀，默认 https://gh-proxy.com
+
 退出码：0 成功；1 失败；2 部分跳过/尚未就绪。
 默认仅启用当前内核 BBR；可选 BBRv3 需安装后另行执行，要求 Ubuntu 24.04+、Debian 12+。
 内核升级会影响整台服务器；重启与真实 SSH/传输验证由用户执行。
@@ -101,6 +105,7 @@ fi
 if [[ "$ACTION" == bbr-fq || "$ACTION" == bbr-restore ]]; then
     [[ "$YES" == 1 ]] || { fail "$ACTION 必须指定 --yes"; exit 1; }
 fi
+shellready_download_config || exit 1
 check_platform
 resolve_user
 # Reading a menu/status must not require root, take the mutation lock or install packages.
@@ -126,7 +131,8 @@ if [[ "$READ_ONLY" == 0 && $EUID != 0 ]]; then
     [[ "$RESTORE_BBR" == 0 ]] || args+=(--restore-bbr)
     [[ -z "$TAG" ]] || args+=(--tag "$TAG")
     [[ "$YES" == 0 ]] || args+=(--yes)
-    exec sudo bash "$ROOT/install.sh" "${args[@]}"
+    exec sudo env "SHELLREADY_DOWNLOAD_MODE=$SHELLREADY_DOWNLOAD_MODE" \
+        "SHELLREADY_GITHUB_MIRROR=$SHELLREADY_GITHUB_MIRROR" bash "$ROOT/install.sh" "${args[@]}"
 fi
 
 RESULTS=()

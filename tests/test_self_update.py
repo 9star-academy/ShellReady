@@ -35,7 +35,8 @@ printf 'REMAINING:%s\n' "$remaining"
                                 env={**os.environ, 'ROOT': str(ROOT), 'TEST_PREFIX': str(self.prefix),
                                      'PATH': str(self.work / 'bin') + os.pathsep + os.environ['PATH'],
                                      'FIXTURES': str(self.work), 'TMPDIR': str(self.work / 'tmp'),
-                                     'SHELLREADY_REF': 'old-pinned-version', **env})
+                                     'SHELLREADY_REF': 'old-pinned-version',
+                                     'SHELLREADY_DOWNLOAD_MODE': 'direct', **env})
         self.assertEqual(list((self.work / 'tmp').iterdir()), [])
         return result
 
@@ -102,7 +103,7 @@ class InstalledSelfUpdateTests(unittest.TestCase):
                            PATH=str(remote.work / 'bin') + os.pathsep + fixture.env['PATH'])
 
     def snapshot(self):
-        with tarfile.open(self.remote.work / 'source.tar.gz', 'w:gz') as archive:
+        with tarfile.open(self.remote.work / 'source.tar.gz', 'w:gz', pax_headers={'comment': bootstrap.COMMIT}) as archive:
             archive.add(self.fixture.repo, arcname='snapshot')
 
     def test_installed_menu_updates_from_snapshot_with_one_lock_and_preserves_user_state(self):
@@ -159,6 +160,15 @@ class InstalledSelfUpdateTests(unittest.TestCase):
         self.assertEqual((fixture.prefix / 'app/modules/menu.sh').read_bytes(), before)
         self.assertEqual(list((self.remote.work / 'tmp').iterdir()), [])
         fixture.run_cli(manager=True, choices='0\n')
+
+    def test_cn_update_uses_mirror_without_origin_or_commit_api(self):
+        self.fixture.env.update(SHELLREADY_DOWNLOAD_MODE='cn',
+                                SHELLREADY_GITHUB_MIRROR='https://mirror.example', BLOCK_ORIGIN='1')
+        result = self.fixture.run_cli('self-update', manager=True)
+        self.assertIn('操作完成', result.stdout)
+        self.assertIn('# updated-menu-fixture', (self.fixture.prefix / 'app/modules/menu.sh').read_text())
+        requests = (self.remote.work / 'requests').read_text().splitlines()
+        self.assertEqual(requests, ['https://mirror.example/https://github.com/9star-academy/ShellReady/archive/main.tar.gz'])
 
     def test_failed_component_repair_does_not_report_success_and_allows_retry(self):
         fixture = self.fixture

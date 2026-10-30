@@ -62,18 +62,28 @@ install_zoxide() { install_tool zoxide; }
 
 install_manager() {
     local rel dir
+    shellready_download_config || return 1
     for rel in install.sh bootstrap.sh lib/common.sh modules/tools.sh modules/shell.sh modules/bbr.sh modules/kernel.sh modules/components.sh modules/update.sh modules/menu.sh modules/qdisc.sh \
         config/assets.tsv config/init.zsh config/starship.toml config/atuin/config.toml; do
         dir=$(dirname "$rel")
         as_user mkdir -p "$PREFIX/app/$dir" || return 1
         user_write "$PREFIX/app/$rel" "$ROOT/$rel" || return 1
     done
-    cat > "$WORK/manager" <<'EOF'
+    {
+        cat <<'EOF'
 #!/usr/bin/env bash
+EOF
+        # Both defaults have been validated before writing shell source.
+        # shellcheck disable=SC2016
+        printf 'export SHELLREADY_DOWNLOAD_MODE="${SHELLREADY_DOWNLOAD_MODE:-%s}"\n' "$SHELLREADY_DOWNLOAD_MODE"
+        # shellcheck disable=SC2016
+        printf 'export SHELLREADY_GITHUB_MIRROR="${SHELLREADY_GITHUB_MIRROR:-%s}"\n' "$SHELLREADY_GITHUB_MIRROR"
+        cat <<'EOF'
 directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 if (($# == 0)); then set -- menu; fi
 exec bash "$directory/../app/install.sh" "$@"
 EOF
+    } > "$WORK/manager"
     user_write "$PREFIX/bin/shellready" "$WORK/manager" || return 1
     as_user chmod 755 "$PREFIX/bin/shellready" || return 1
 }

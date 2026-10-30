@@ -67,13 +67,53 @@ flowchart LR
 bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/main/bootstrap.sh)
 ```
 
-入口会下载同一个 commit 的完整源码，再启动安装器，默认安装全部六个组件；不需要手动克隆仓库。这里使用 `bootstrap.sh`，因为 `install.sh` 需要仓库里的组件模块，不能单独下载执行。
+**国内服务器推荐**：通过 jsDelivr 下载引导脚本，并启用 `cn` 镜像优先模式，后续源码和工具也使用镜像，无需配置本机网络代理：
+
+```bash
+SHELLREADY_DOWNLOAD_MODE=cn bash <(curl -fsSL https://cdn.jsdelivr.net/gh/9star-academy/ShellReady@main/bootstrap.sh)
+```
+
+该入口同样支持在命令末尾追加 `--help`、`menu` 等参数。jsDelivr 可能存在缓存，新提交不一定立即可用。
+
+若 jsDelivr 入口不可用或仍缓存旧版，可改用 GitHub 下载镜像入口：
+
+```bash
+SHELLREADY_DOWNLOAD_MODE=cn bash <(curl -fsSL https://gh-proxy.com/https://raw.githubusercontent.com/9star-academy/ShellReady/main/bootstrap.sh)
+```
+
+入口会下载单份完整源码快照，再启动安装器，默认安装全部六个组件；不需要手动克隆仓库。直连路径先解析 commit，国内路径从源码归档中读取 commit 并显示，避免依赖 GitHub commit API。这里使用 `bootstrap.sh`，因为 `install.sh` 需要仓库里的组件模块，不能单独下载执行。
 
 只查看帮助，不安装：
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/main/bootstrap.sh) --help
 ```
+
+国内服务器只查看帮助：
+
+```bash
+SHELLREADY_DOWNLOAD_MODE=cn bash <(curl -fsSL https://cdn.jsdelivr.net/gh/9star-academy/ShellReady@main/bootstrap.sh) --help
+```
+
+### 下载模式与镜像
+
+| 模式 | 下载顺序 |
+| :--- | :--- |
+| `auto`（默认） | 优先 GitHub 上游，失败后尝试镜像 |
+| `cn` | 优先镜像，失败后尝试 GitHub 上游；源码直接使用归档，不调用 commit API |
+| `direct` | 仅使用 GitHub 上游，不访问镜像 |
+
+下载策略覆盖源码、五个工具、`self-update`、BBRv3 版本列表和可选内核包。Raw 文件先尝试 jsDelivr，其余 GitHub 下载默认使用 `https://gh-proxy.com` 前缀；API 镜像失败时还会尝试 `https://gh-api.p3terx.com`。工具固定版本和 SHA-256 校验保留，可选内核也继续校验发行包 digest。源码归档中的 commit 只标识版本，不构成独立签名验证；使用镜像意味着信任该服务提供的源码和元数据。
+
+安装后的 `shellready` 入口会记住安装时的模式和镜像配置，后续菜单更新无需重复设置。可以通过环境变量临时覆盖，也可指定自己可访问的 HTTPS 镜像前缀（不含凭据、查询参数，服务需支持“前缀/完整 GitHub URL”格式）：
+
+```bash
+SHELLREADY_DOWNLOAD_MODE=cn SHELLREADY_GITHUB_MIRROR=https://your-mirror.example bash install.sh
+SHELLREADY_DOWNLOAD_MODE=direct shellready self-update
+```
+
+> [!IMPORTANT]
+> 国内模式仍需服务器能访问所选镜像，公共服务可能故障、限流或缓存旧版本，可用 `SHELLREADY_GITHUB_MIRROR` 更换镜像。系统依赖继续使用服务器现有 APT 软件源，需要该软件源可达；安装器不自动更改系统源。国内服务器的完整安装仍需实机验收。
 
 ### 常用安装说明与参数
 
@@ -102,6 +142,10 @@ bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/mai
 - **远程引导入口执行**（新版源码发布后）：
   ```bash
   bash <(curl -fsSL https://raw.githubusercontent.com/9star-academy/ShellReady/main/bootstrap.sh) menu
+  ```
+- **国内镜像优先入口执行**（下载策略见[一条命令安装](#一条命令安装)）：
+  ```bash
+  SHELLREADY_DOWNLOAD_MODE=cn bash <(curl -fsSL https://cdn.jsdelivr.net/gh/9star-academy/ShellReady@main/bootstrap.sh) menu
   ```
 - **已安装后日常调用**：自动进入 Zsh 后，输入 `shellready` 或 `shellready menu` 打开总菜单。
   - 已有旧版安装时，用新版完整源码运行 `bash install.sh repair` 更新本地管理入口；它只修复已有组件，不补装已卸载的工具。

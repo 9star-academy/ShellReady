@@ -17,6 +17,7 @@ class InstallGuidanceTests(unittest.TestCase):
         self.repo = self.work / 'repo'
         self.repo.mkdir()
         shutil.copy(ROOT / 'install.sh', self.repo)
+        shutil.copy(ROOT / 'bootstrap.sh', self.repo)
         for name in ('lib', 'modules'):
             shutil.copytree(ROOT / name, self.repo / name)
         entry = self.repo / 'install.sh'

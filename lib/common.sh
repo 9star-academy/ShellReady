@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # Shared helpers. Functions are also sourced by isolated tests.
+# Keep the standalone entry and installed manager on the same download policy.
+# shellcheck source=bootstrap.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/bootstrap.sh"
 log() { printf '[ShellReady] %s\n' "$*"; }
 fail() { printf '[ShellReady] %s\n' "$*" >&2; return 1; }
 
@@ -56,15 +59,7 @@ check_platform() {
 }
 
 download() {
-    local url=$1 dest=$2
-    [[ "$url" == https://* ]] || { fail '下载仅接受 HTTPS'; return 1; }
-    rm -f "$dest.part"
-    if command -v curl >/dev/null 2>&1; then
-        curl --proto '=https' --proto-redir '=https' -fL --retry 3 --connect-timeout 15 --max-time 900 -o "$dest.part" "$url" || return 1
-    else
-        wget --https-only --tries=3 --timeout=60 -O "$dest.part" "$url" || return 1
-    fi
-    mv "$dest.part" "$dest"
+    shellready_download "$@"
 }
 
 verify_sha256() {

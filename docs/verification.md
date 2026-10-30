@@ -1,5 +1,32 @@
 # ShellReady 首版验证记录
 
+## 2026-10-30：国内镜像下载适配
+
+新增 `SHELLREADY_DOWNLOAD_MODE=auto|cn|direct` 和 `SHELLREADY_GITHUB_MIRROR`，统一用于独立 bootstrap、工具下载、在线更新以及可选内核的 API/包下载。国内模式从单份源码归档的全局 PAX 头读取完整 commit，不依赖 commit API；auto 在 API 下载失败后也可使用此路径。固定 commit 下载、HTTPS、工具 SHA-256、内核 digest 校验和安装器退出码语义保留。安装时配置显式传过 sudo，并保存为管理入口的默认值，后续可用环境变量覆盖。不修改系统 APT 源。
+
+先通过新增测试复现旧下载器无法切换镜像、缺少模式校验、失败残留 `.part` 等行为，再实现。回归覆盖 GitHub 上游全部不可达时的源码和已安装管理入口更新、Raw/CDN 固定 commit、API 限流回退、curl/wget、提权配置、下载失败不替换有效文件、错误归档 commit 和工具哈希不符时拒绝使用。
+
+实际验证：
+
+- `python3 -m unittest discover -s tests -q`：**224 项全部通过，无跳过**，105.172 秒（基线 202 项，本轮新增 22 项）。
+- `PATH=/tmp/shellcheck-v0.11.0:$PATH bash tests/check.sh`：通过，包含 Bash/Zsh 语法、ShellCheck、忽略规则和空白检查。临时下载官方 ShellCheck 0.11.0，SHA-256 与官方发布 digest 匹配，未安装系统依赖。
+- `PATH=/private/tmp/shellready-validation-20261026/shellcheck-v0.9.0:$PATH bash tests/check.sh`：通过，复核现有 CI 使用版本的兼容性。
+- `SHELLREADY_DOWNLOAD_MODE=cn bash bootstrap.sh --help`：真实从镜像下载源码，输出 commit `9003b5b8e44794675e9822c9d7d9577277d5bfbb` 并显示安装器帮助，未运行安装。远端 main 当时仍为旧源码，此检查验证本地新 bootstrap 的下载/commit/启动链路。
+- 使用新 `download()` 以 cn 模式下载 `config/assets.tsv` 全部九个文件：trzsz、Starship、Atuin、zoxide 各 x86_64/ARM64 两个产物，以及固定 commit 的 zsh-autosuggestions。全部匹配仓库既有 SHA-256，未执行下载的 Linux 工具。
+- 真实内核版本查询：`gh-proxy.com` 的 API 返回 403/共享配额耗尽，自动回退 `gh-api.p3terx.com` 后，`kernel_release_tags` 成功列出标准 x86_64 版本。未下载或安装内核包。
+
+国内服务器验收（新版代码推送后）：
+
+```bash
+SHELLREADY_DOWNLOAD_MODE=cn bash <(curl -fsSL https://cdn.jsdelivr.net/gh/9star-academy/ShellReady@main/bootstrap.sh) --help
+SHELLREADY_DOWNLOAD_MODE=cn bash <(curl -fsSL https://cdn.jsdelivr.net/gh/9star-academy/ShellReady@main/bootstrap.sh)
+shellready status
+```
+
+预期先看到 `ShellReady snapshot: <40位commit>` 和帮助；安装时源码/工具优先使用镜像，无需配置本机代理，完成后进入 Zsh，状态检查应报告工具已启用（BBR 取决于实际宿主内核）。安装器仍要求当前 APT 源可达；镜像的地区可达性、实时故障和缓存不能由本机测试保证。
+
+本机为 macOS，未执行国内服务器完整安装、真实 Linux sudo/apt/chsh、内核安装或 SSH 验收。源码和 API 元数据来自所选第三方服务，commit 标识不是独立签名验证；工具另由仓库固定哈希校验。本轮未提交、未推送。
+
 ## 2026-10-28：Ubuntu 系统级 compinit 提前执行修复
 
 再次提供的 Actions 日志对应提交 `f039cef`，201 项测试在 252.827 秒后出现 13 处失败，仍停在 compinit 的权限确认提示。已核实该提交包含项目初始化中的 `compinit -i`，因此不是旧源码或修复未提交。
