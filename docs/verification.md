@@ -1,5 +1,13 @@
 # ShellReady 首版验证记录
 
+## 2026-11-18：启动与安装字符 Logo
+
+采用用户生成页面中的 `slant` 字形，51 列、6 行，字符内容统一放在独立 `bootstrap.sh` 中。远程入口在下载前显示，本地 install/update 在提权后显示；远程横幅标记显式经过 sudo，并在安装器中消费，避免重复输出或传入后续 Zsh。总菜单与 BBR 子菜单沿用暖黄色，并将 Logo 的实际行数计入重绘；高度或宽度不足时使用单行简版，原 25/24 行的方向键窗口边界保留。无需额外字体或生成器，管道和 dumb 输出无颜色，支持 `NO_COLOR`。
+
+验证：`python3 -m unittest discover -s tests -q` **226 项全部通过，无跳过**，111.102 秒；其中菜单/横幅专项 **27 项通过**。新增 PTY 检查覆盖完整/简版尺寸边界、重绘后的实际可见 Logo 与输入提示、安装输入重定向时仍读取输出终端尺寸，以及无色输出。远程安装回归确认下载前显示一次、后续登录 Zsh 不继承横幅标记；原安装、更新、单项管理和会话回归通过。
+
+Bash/Zsh 语法与 `git diff --check` 通过。`bash tests/check.sh` 在 ShellCheck 步骤因本机未安装该工具而停止，此项未完成；未执行真实 Linux 安装或 SSH 验收。改动未提交、未推送。
+
 ## 2026-10-30：国内镜像下载适配
 
 新增 `SHELLREADY_DOWNLOAD_MODE=auto|cn|direct` 和 `SHELLREADY_GITHUB_MIRROR`，统一用于独立 bootstrap、工具下载、在线更新以及可选内核的 API/包下载。国内模式从单份源码归档的全局 PAX 头读取完整 commit，不依赖 commit API；auto 在 API 下载失败后也可使用此路径。固定 commit 下载、HTTPS、工具 SHA-256、内核 digest 校验和安装器退出码语义保留。安装时配置显式传过 sudo，并保存为管理入口的默认值，后续可用环境变量覆盖。不修改系统 APT 源。

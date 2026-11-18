@@ -8,6 +8,7 @@ import errno
 import fcntl
 from pathlib import Path
 import pty
+import re
 import select
 import shutil
 import signal
@@ -187,7 +188,12 @@ sysctl() {
                     os.close(master)
                     os.close(slave)
                 installer_output = output.decode().split('正在进入', 1)[0]
-                self.assertNotIn('\x1b', installer_output)
+                # Branding may use SGR colors; installation still has no menu
+                # cursor controls, input prompts or terminal background changes.
+                plain = re.sub(r'\x1b\[(?:0|38;2;241;198;94)m', '', installer_output)
+                self.assertNotIn('\x1b', plain)
+                self.assertIn('/____/_/ /_/', plain)
+                self.assertEqual(plain.count('新服务器，一键配顺手。'), 1)
                 self.assertTrue(sent_exit, output.decode())
                 self.assertNotIn('请选择', output.decode())
                 self.assertFalse((self.work / 'menu-calls').exists())

@@ -178,10 +178,24 @@ menu_author_credit() {
     MENU_LINES=$((MENU_LINES + 1))
 }
 
+menu_logo() {
+    local line minimum_rows=29
+    [[ "$1" != main ]] || minimum_rows=30
+    # The six logo rows replace one separator. Keep the existing small-window
+    # navigation thresholds by using one compact row when space is limited.
+    if ((MENU_WIDTH >= 51 && MENU_ROWS >= minimum_rows)); then
+        while IFS= read -r line; do
+            menu_line "$line" "$MENU_ACCENT"
+        done < <(shellready_logo)
+    else
+        menu_line '>_ ShellReady' "$MENU_ACCENT"
+    fi
+}
+
 menu_draw() {
     local kind=$1 bbr_state='[未启用]'
     MENU_LINES=0
-    menu_separator
+    menu_logo "$kind"
     if [[ "$kind" == main ]]; then
         menu_line 'ShellReady 管理菜单 / 新服务器，一键配顺手' "$MENU_ACCENT"
         menu_line "用户 ${TARGET_USER}  /  ${PRETTY_NAME:-Linux}  /  ${ARCH:-未知架构}" "$MENU_MUTED"

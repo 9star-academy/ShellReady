@@ -1,5 +1,48 @@
 #!/usr/bin/env bash
-# Standalone entry and shared download helpers. Sourcing never starts installation.
+# Standalone entry and shared helpers. Sourcing never starts installation.
+
+# slant lettering from the project's ASCII-Art-Generator result (51 columns).
+# Keep this in the standalone entry so downloads and installed menus share it.
+shellready_logo() {
+    cat <<'EOF'
+         __         ____                    __
+   _____/ /_  ___  / / /_______  ____ _____/ /_  __
+  / ___/ __ \/ _ \/ / / ___/ _ \/ __ `/ __  / / / /
+ (__  ) / / /  __/ / / /  /  __/ /_/ / /_/ / /_/ /
+/____/_/ /_/\___/_/_/_/   \___/\__,_/\__,_/\__, /
+                                          /____/
+EOF
+}
+
+shellready_banner() {
+    local size rows columns line color='' reset=''
+    rows=24; columns=80
+    if [[ -t 1 && ${TERM:-dumb} != dumb ]]; then
+        # Preserve stdout before command substitution turns it into a pipe.
+        # Menu actions have /dev/null stdin, so stty must use the output terminal.
+        { size=$(stty size <&3 2>/dev/null || true); } 3<&1
+        read -r rows columns <<< "$size" || true
+        [[ "$rows" =~ ^[1-9][0-9]{0,3}$ ]] || rows=24
+        [[ "$columns" =~ ^[1-9][0-9]{0,3}$ ]] || columns=80
+        if [[ -z ${NO_COLOR:-} ]]; then
+            reset=$'\033[0m'
+            case "${COLORTERM:-}:${TERM:-}" in
+                truecolor:*|24bit:*|*:*direct*) color=$'\033[38;2;241;198;94m' ;;
+                *:*-256color*) color=$'\033[38;5;221m' ;;
+                *) color=$'\033[33m' ;;
+            esac
+        fi
+    fi
+    if [[ -t 1 && ${TERM:-dumb} != dumb ]] && ((columns >= 52 && rows >= 10)); then
+        while IFS= read -r line; do
+            printf '%b%s%b\n' "$color" "$line" "$reset"
+        done < <(shellready_logo)
+    else
+        printf '%bShellReady%b\n' "$color" "$reset"
+    fi
+    printf '%b新服务器，一键配顺手。%b\n\n' "$color" "$reset"
+}
+
 shellready_download_config() {
     export SHELLREADY_DOWNLOAD_MODE=${SHELLREADY_DOWNLOAD_MODE:-auto}
     export SHELLREADY_GITHUB_MIRROR=${SHELLREADY_GITHUB_MIRROR:-https://gh-proxy.com}
@@ -69,6 +112,12 @@ shellready_download() {
 
 shellready_bootstrap() (
     set -euo pipefail
+    # Help stays plain; all other remote invocations show branding before downloads.
+    show_banner=1
+    for arg in "$@"; do
+        case "$arg" in --help|-h) show_banner=0 ;; esac
+    done
+    if [[ "$show_banner" == 1 ]]; then shellready_banner; fi
     REPO=9star-academy/ShellReady
     REF=${SHELLREADY_REF:-main}
     [[ "$REF" =~ ^[a-zA-Z0-9._/-]+$ && "$REF" != -* ]] || { echo '无效仓库 ref' >&2; exit 1; }
@@ -111,7 +160,7 @@ shellready_bootstrap() (
     # Only the installer may return 2 for skipped/pending work.
     tar -xf "$WORK/source.tar" --strip-components=1 -C "$WORK/source" || exit 1
     printf 'ShellReady snapshot: %s\n' "$COMMIT"
-    bash "$WORK/source/install.sh" "$@"
+    SHELLREADY_BOOTSTRAP_BANNER=1 bash "$WORK/source/install.sh" "$@"
 )
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

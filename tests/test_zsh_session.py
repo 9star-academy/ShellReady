@@ -332,8 +332,13 @@ esac
         bootstrap_tmp = self.work / 'bootstrap-tmp'
         bootstrap_tmp.mkdir()
         self.fixture.env['TMPDIR'] = str(bootstrap_tmp)
+        (self.home / '.zlogin').write_text(
+            'print -r -- "BANNER_MARKER:${SHELLREADY_BOOTSTRAP_BANNER-unset}"\n')
         rc, output = self.terminal('--skip-bbr', bootstrap=True)
         self.assertEqual(rc, 0, output)
+        self.assertEqual(output.count('新服务器，一键配顺手。'), 1)
+        self.assertLess(output.index('新服务器，一键配顺手。'), output.index('[ShellReady] 下载'))
+        self.assertIn('BANNER_MARKER:unset', output)
         self.assertIn('ShellReady snapshot:', output)
         self.assertEqual(list(bootstrap_tmp.iterdir()), [])
 

@@ -21,7 +21,7 @@ class ManagementCLITests(unittest.TestCase):
                          ['install_manager', 'tool:atuin', 'install_shell'])
         self.assertEqual((self.fixture.work / 'algo').read_text(), 'cubic')
 
-    def test_sudo_receives_only_explicit_download_configuration(self):
+    def test_sudo_receives_explicit_download_configuration_and_banner_marker(self):
         entry = self.fixture.repo / 'install.sh'
         entry.write_text(entry.read_text().replace('if false; then', 'if [[ "$READ_ONLY" == 0 ]]; then', 1))
         sudo = self.fixture.work / 'bin/sudo'
@@ -29,13 +29,15 @@ class ManagementCLITests(unittest.TestCase):
         sudo.chmod(0o755)
         env = {**os.environ, 'PATH': str(sudo.parent) + os.pathsep + os.environ['PATH'],
                'TEST_WORK': str(self.fixture.work), 'SHELLREADY_DOWNLOAD_MODE': 'cn',
-               'SHELLREADY_GITHUB_MIRROR': 'https://mirror.example/prefix'}
+               'SHELLREADY_GITHUB_MIRROR': 'https://mirror.example/prefix',
+               'SHELLREADY_BOOTSTRAP_BANNER': '1'}
         result = subprocess.run(['bash', str(entry), '--keep-shell', '--skip-bbr'],
                                 env=env, capture_output=True, text=True, timeout=5)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         args = (self.fixture.work / 'sudo-args').read_text().splitlines()
-        self.assertEqual(args[:4], ['env', 'SHELLREADY_DOWNLOAD_MODE=cn',
-                                   'SHELLREADY_GITHUB_MIRROR=https://mirror.example/prefix', 'bash'])
+        self.assertEqual(args[:5], ['env', 'SHELLREADY_DOWNLOAD_MODE=cn',
+                                   'SHELLREADY_GITHUB_MIRROR=https://mirror.example/prefix',
+                                   'SHELLREADY_BOOTSTRAP_BANNER=1', 'bash'])
         self.assertIn('--keep-shell', args)
         self.assertIn('--skip-bbr', args)
 

@@ -186,6 +186,49 @@ class MenuStyleTests(unittest.TestCase):
                     self.assertIn('默认队列：fq', plain)
                 self.finish(terminal)
 
+    def test_logo_fits_and_survives_redraw_at_full_and_compact_boundaries(self):
+        logo = '/____/_/ /_/'
+        for entry, full_rows in (('main_menu', 30), ('bbr_menu', 29)):
+            for rows, columns, full in ((full_rows, 64, True),
+                                        (full_rows - 1, 64, False),
+                                        (34, 51, False)):
+                with self.subTest(entry=entry, rows=rows, columns=columns):
+                    terminal = self.terminal(rows=rows, columns=columns, ENTRY=entry)
+                    output = self.receive(*terminal[:2])
+                    plain = ANSI.sub('', output)
+                    self.assertEqual(logo in plain, full)
+                    self.assertEqual('>_ ShellReady' in plain, not full)
+                    screen = MenuScreen(columns=columns, rows=rows)
+                    screen.feed(output)
+                    screen.feed(self.send(terminal, b'2'))
+                    visible = '\n'.join(''.join(row) for row in screen.cells)
+                    self.assertEqual(visible.count(logo), int(full))
+                    self.assertIn('ShellReady', visible)
+                    self.assertEqual(screen.prompt(), '请选择：2')
+                    self.assertNotIn('CALL:', output)
+                    self.finish(terminal, b'\x04')
+
+    def test_install_banner_uses_output_terminal_size_with_redirected_input(self):
+        script = r'''set -euo pipefail
+source "$ROOT/bootstrap.sh"
+shellready_banner </dev/null
+printf '请选择：'
+IFS= read -r choice
+'''
+        for rows, columns, extra, full in (
+                (24, 64, {}, True), (24, 51, {}, False), (9, 64, {}, False),
+                (24, 64, {'NO_COLOR': '1'}, True), (24, 64, {'TERM': 'dumb'}, False)):
+            with self.subTest(rows=rows, columns=columns, extra=extra):
+                terminal = self.terminal(rows=rows, columns=columns, script=script, **extra)
+                output = self.receive(*terminal[:2])
+                self.assertEqual('/____/_/ /_/' in output, full)
+                self.assertEqual(output.count('新服务器，一键配顺手。'), 1)
+                if extra:
+                    self.assertNotIn('\x1b', output)
+                else:
+                    self.assertIn('\x1b[38;2;241;198;94m', output)
+                self.finish(terminal)
+
     def test_typing_selects_bbr_without_action_until_enter(self):
         terminal = self.terminal()
         self.receive(*terminal[:2])

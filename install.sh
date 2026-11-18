@@ -105,6 +105,9 @@ fi
 if [[ "$ACTION" == bbr-fq || "$ACTION" == bbr-restore ]]; then
     [[ "$YES" == 1 ]] || { fail "$ACTION 必须指定 --yes"; exit 1; }
 fi
+# Consume the remote splash marker so later menu actions get their own header.
+BOOTSTRAP_BANNER_SHOWN=${SHELLREADY_BOOTSTRAP_BANNER:-0}
+unset SHELLREADY_BOOTSTRAP_BANNER
 shellready_download_config || exit 1
 check_platform
 resolve_user
@@ -132,7 +135,12 @@ if [[ "$READ_ONLY" == 0 && $EUID != 0 ]]; then
     [[ -z "$TAG" ]] || args+=(--tag "$TAG")
     [[ "$YES" == 0 ]] || args+=(--yes)
     exec sudo env "SHELLREADY_DOWNLOAD_MODE=$SHELLREADY_DOWNLOAD_MODE" \
-        "SHELLREADY_GITHUB_MIRROR=$SHELLREADY_GITHUB_MIRROR" bash "$ROOT/install.sh" "${args[@]}"
+        "SHELLREADY_GITHUB_MIRROR=$SHELLREADY_GITHUB_MIRROR" \
+        "SHELLREADY_BOOTSTRAP_BANNER=$BOOTSTRAP_BANNER_SHOWN" bash "$ROOT/install.sh" "${args[@]}"
+fi
+
+if [[ ( "$ACTION" == install || "$ACTION" == update ) && "$BOOTSTRAP_BANNER_SHOWN" != 1 ]]; then
+    shellready_banner
 fi
 
 RESULTS=()

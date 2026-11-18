@@ -151,6 +151,8 @@ SHELLREADY_DOWNLOAD_MODE=direct shellready self-update
   - 已有旧版安装时，用新版完整源码运行 `bash install.sh repair` 更新本地管理入口；它只修复已有组件，不补装已卸载的工具。
   - `shellready install` 继续直接全量安装。
 
+安装入口、总菜单和 BBR 子菜单共用 `slant` 字符 Logo，沿用暖黄色配色，无需额外字体或生成器。终端空间充足时显示完整 Logo，窄窗口或菜单高度不足时使用简版；重定向输出和 `TERM=dumb` 使用纯文本，`NO_COLOR` 可关闭颜色。
+
 ```text
 ShellReady 管理菜单
 1. 一键安装全部功能
