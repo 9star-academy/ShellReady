@@ -385,7 +385,9 @@ shellready bbr-restore --yes
 
 采用“先完成基础安装，再主动升级”的流程。独立入口使用 [byJoey/Actions-bbr-v3 Releases](https://github.com/byJoey/Actions-bbr-v3/releases) 的**标准版**内核包，要求明确指定 release tag。ShellReady 自行校验和安装发行包，不直接执行上游远程 `install.sh`，不附带其 Max 模式或其他网络调优。先检查系统、架构、容器环境、GRUB、当前内核回退文件、磁盘空间和 UEFI Secure Boot 状态。
 
-- **前置要求**：系统最低要求为 **Ubuntu 24.04 及以上、Debian 12 及以上**，包括 Ubuntu 26.04。要求 `update-grub`、`grub-script-check`、`systemd-detect-virt`，当前内核和 initramfs 文件及匹配的 GRUB 启动项，以及 `/boot` 所在分区至少 1 GiB 可用空间。UEFI 环境还需 `mokutil`，且必须确认 Secure Boot 关闭。其他引导方式不自动处理。
+- **前置要求**：系统最低要求为 **Ubuntu 24.04 及以上、Debian 12 及以上**，包括 Ubuntu 26.04。要求 `update-grub`、`grub-script-check`、`systemd-detect-virt` 和可核验的当前内核回退启动项。UEFI 环境还需 `mokutil`，且必须确认 Secure Boot 关闭。其他引导方式不自动处理。
+- **启动空间**：`/boot` 至少需要 512 MiB 可用空间，并根据已校验内核包的实际 `/boot` 文件大小加上 256 MiB 的 initramfs/引导工作余量复查；准备旧内核镜像后会再次核验。空间不足时停止，不删除旧内核或自动扩容分区。
+- **Ubuntu 精简云镜像**：明确检测到 `GRUB_FORCE_PARTUUID` 的 initrdless 启动模式时，先备份 GRUB，为已有内核补齐 initramfs，再用独立配置切换为加载 initramfs 的启动方式。优先使用现有生成工具；缺少时，Ubuntu 25.10+ 安装 `dracut`，其他支持系统安装 `initramfs-tools`。原云配置保留，新增设置为 `/etc/default/grub.d/zz-shellready-initramfs.cfg`，备份位于 `/var/lib/shellready/kernels/boot-preparation.*/grub.cfg`。准备或核验失败会尝试恢复原 GRUB 配置并停止，不安装新内核；未知引导损坏不自动处理。准备好的生成工具、旧内核镜像、引导设置和备份随保留的内核继续保留，普通工具卸载不移除它们。
 
 基础安装完成并进入配置后的 Zsh 后，在 Releases 页面选择与服务器架构对应的标准 tag：`x86_64` 使用 `x86_64-X.Y.Z`，`ARM64` 使用 `arm64-X.Y.Z`，不带 `-max`。然后执行（占位符需要替换，不接受 `latest`）：
 

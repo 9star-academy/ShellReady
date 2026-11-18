@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 KERNEL_STATE=/var/lib/shellready/kernels
 KERNEL_BOOT_DIR=/boot
+KERNEL_MODULES_DIR=/lib/modules
+KERNEL_GRUB_DEFAULTS_DIR=/etc/default/grub.d
 
 show_bbrv3_hint() {
     printf '\n'
@@ -18,18 +20,16 @@ show_bbrv3_hint() {
 # This checks on-disk recovery evidence; only a real boot can validate hardware support.
 verify_kernel_files() {
     local kernel=$1
-    [[ -f "$KERNEL_BOOT_DIR/vmlinuz-$kernel" && -f "$KERNEL_BOOT_DIR/initrd.img-$kernel" ]] || {
-        fail "缺少内核或 initramfs 启动文件：$kernel"; return 1;
-    }
+    [[ -f "$KERNEL_BOOT_DIR/vmlinuz-$kernel" && -s "$KERNEL_BOOT_DIR/vmlinuz-$kernel" ]] || { fail "缺少有效内核镜像：$KERNEL_BOOT_DIR/vmlinuz-$kernel"; return 1; }
+    [[ -f "$KERNEL_BOOT_DIR/initrd.img-$kernel" && -s "$KERNEL_BOOT_DIR/initrd.img-$kernel" ]] || { fail "缺少有效 initramfs：$KERNEL_BOOT_DIR/initrd.img-$kernel"; return 1; }
 }
 
-verify_kernel_boot() {
-    local kernel=$1 config="$KERNEL_BOOT_DIR/grub/grub.cfg"
-    verify_kernel_files "$kernel" || return 1
+verify_kernel_grub_entry() {
+    local kernel=$1 require_initrd=${2:-1} config="$KERNEL_BOOT_DIR/grub/grub.cfg"
     [[ -r "$config" ]] || { fail '无法读取 GRUB 启动配置'; return 1; }
     command -v grub-script-check >/dev/null 2>&1 || { fail '缺少 grub-script-check，无法核验 GRUB 配置'; return 1; }
     grub-script-check "$config" || { fail 'GRUB 配置语法检查失败，请勿重启'; return 1; }
-    awk -v kernel="$kernel" '
+    awk -v kernel="$kernel" -v require_initrd="$require_initrd" '
         /^[[:space:]]*menuentry[[:space:]]/ { entry=1; image=0; initrd=0 }
         entry && $1 ~ /^linux(efi|16)?$/ {
             image=($2 == "/vmlinuz-" kernel || $2 == "/boot/vmlinuz-" kernel)
@@ -38,9 +38,145 @@ verify_kernel_boot() {
             for (i=2; i<=NF; i++)
                 if ($i == "/initrd.img-" kernel || $i == "/boot/initrd.img-" kernel) initrd=1
         }
-        entry && /^[[:space:]]*}/ { if (image && initrd) found=1; entry=0 }
+        entry && /^[[:space:]]*}/ { if (image && (initrd || !require_initrd)) found=1; entry=0 }
         END { exit !found }
     ' "$config" || { fail "GRUB 中缺少匹配内核与 initramfs 的启动项：$kernel"; return 1; }
+}
+
+kernel_grub_is_initrdless() {
+    grep -q '^# GRUB_FORCE_PARTUUID is set, will attempt initrdless boot' "$KERNEL_BOOT_DIR/grub/grub.cfg" 2>/dev/null
+}
+
+verify_kernel_boot() {
+    verify_kernel_files "$1" || return 1
+    if kernel_grub_is_initrdless; then
+        fail 'GRUB 仍强制无 initramfs 启动，不能据此确认第三方内核可启动'; return 1
+    fi
+    verify_kernel_grub_entry "$1"
+}
+
+# Only recognize Ubuntu's explicit cloud-image mode, never arbitrary missing files.
+kernel_initrdless_candidate() {
+    [[ "${ID:-}" == ubuntu && -f "$KERNEL_BOOT_DIR/vmlinuz-$(uname -r)" && -s "$KERNEL_BOOT_DIR/vmlinuz-$(uname -r)" ]] || return 1
+    kernel_grub_is_initrdless || return 1
+    verify_kernel_grub_entry "$(uname -r)" 0
+}
+
+kernel_check_boot_space() {
+    local required_kb=${1:-524288} free_kb
+    free_kb=$(df -Pk "$KERNEL_BOOT_DIR" | awk 'END {print $4}') || return 1
+    [[ "$free_kb" =~ ^[0-9]+$ ]] || { fail '无法读取 /boot 可用空间'; return 1; }
+    if ((free_kb < required_kb)); then
+        fail "/boot 可用 $((free_kb / 1024)) MiB，需要至少 $(((required_kb + 1023) / 1024)) MiB；保留旧内核，不自动清理或扩容分区"; return 1
+    fi
+}
+
+kernel_package_boot_budget() {
+    local deb=$1 kernel=$2 bytes
+    # Inspect the verified package without installing/extracting it. Debian's
+    # contents listing has size in field 3 and the archive path in field 6.
+    bytes=$(dpkg-deb --contents "$deb" | LC_ALL=C awk -v kernel="$kernel" '
+        $1 ~ /^-/ && $6 ~ /^\.?\/?boot\// {
+            if ($3 !~ /^[0-9]+$/) { invalid=1; next }
+            size+=$3
+            if ($6 == "./boot/vmlinuz-" kernel || $6 == "boot/vmlinuz-" kernel || $6 == "/boot/vmlinuz-" kernel) image=1
+        }
+        END { if (invalid || !image) exit 1; printf "%.0f\n", size }
+    ') || { fail '无法核验发行包的 /boot 文件与大小'; return 1; }
+    if [[ ! "$bytes" =~ ^[0-9]{1,12}$ ]] || ((bytes <= 0)); then
+        fail '发行包启动文件大小无效'; return 1
+    fi
+    KERNEL_REQUIRED_BOOT_KB=$(((bytes + 1023) / 1024 + 262144))
+    # Reserve room for the new initramfs and GRUB work as well as package files.
+    if ((KERNEL_REQUIRED_BOOT_KB < 524288)); then KERNEL_REQUIRED_BOOT_KB=524288; fi
+    kernel_check_boot_space "$KERNEL_REQUIRED_BOOT_KB"
+}
+
+kernel_ensure_initramfs_tool() {
+    if command -v dracut >/dev/null 2>&1 || command -v mkinitramfs >/dev/null 2>&1; then return 0; fi
+    local package=initramfs-tools
+    if [[ "${ID:-}" == ubuntu ]] && version_at_least "${VERSION_ID:-0}" 25.10; then package=dracut; fi
+    log "准备 initramfs 生成工具：$package"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends --no-remove "$package" || return 1
+    if ! command -v dracut >/dev/null 2>&1 && ! command -v mkinitramfs >/dev/null 2>&1; then
+        fail '安装后仍未找到 initramfs 生成工具'; return 1
+    fi
+}
+
+kernel_generate_initramfs() {
+    local kernel=$1 reserve_kb=${2:-524288} destination="$KERNEL_BOOT_DIR/initrd.img-$1" temporary
+    [[ "$kernel" =~ ^[a-zA-Z0-9._+-]+$ ]] || { fail '无效内核版本'; return 1; }
+    [[ -f "$destination" && -s "$destination" ]] && return 0
+    [[ ! -e "$destination" && ! -L "$destination" ]] || { fail "拒绝覆盖空文件或异常链接：$destination"; return 1; }
+    [[ -d "$KERNEL_MODULES_DIR/$kernel" ]] || { fail "缺少内核模块目录：$KERNEL_MODULES_DIR/$kernel"; return 1; }
+    kernel_check_boot_space "$reserve_kb" || return 1
+    temporary=$(mktemp -d "$KERNEL_BOOT_DIR/.shellready-initramfs.XXXXXXXX") || return 1
+    log "生成 initramfs：$kernel"
+    if command -v dracut >/dev/null 2>&1; then
+        if ! dracut --no-uefi "$temporary/image" "$kernel"; then
+            rm -rf -- "$temporary"; fail "initramfs 生成失败：$kernel"; return 1
+        fi
+    elif ! mkinitramfs -o "$temporary/image" "$kernel"; then
+        rm -rf -- "$temporary"; fail "initramfs 生成失败：$kernel"; return 1
+    fi
+    if [[ ! -f "$temporary/image" || ! -s "$temporary/image" ]] || ! chmod 600 "$temporary/image" || ! mv -- "$temporary/image" "$destination"; then
+        rm -rf -- "$temporary"; fail "无法保存有效 initramfs：$kernel"; return 1
+    fi
+    rm -rf -- "$temporary"
+}
+
+kernel_initramfs_override() {
+    cat <<'EOF'
+# Managed by ShellReady: third-party kernels must load an initramfs.
+GRUB_FORCE_PARTUUID=''
+GRUB_DISABLE_INITRD=false
+EOF
+}
+
+kernel_apply_initramfs_boot() {
+    local override=$1 temporary image kernel
+    kernel_ensure_initramfs_tool || return 1
+    # Complete every existing kernel before changing the global cloud boot mode.
+    for image in "$KERNEL_BOOT_DIR"/vmlinuz-*; do
+        [[ -f "$image" ]] || continue
+        kernel=${image##*/vmlinuz-}
+        kernel_generate_initramfs "$kernel" || return 1
+    done
+    temporary=$(mktemp "$KERNEL_GRUB_DEFAULTS_DIR/.shellready-initramfs.XXXXXXXX") || return 1
+    if ! kernel_initramfs_override > "$temporary" || ! chmod 644 "$temporary" || ! mv -- "$temporary" "$override"; then
+        rm -f -- "$temporary"; return 1
+    fi
+    update-grub || return 1
+    if kernel_grub_is_initrdless; then fail '其他 GRUB 配置仍强制 initrdless 启动，停止安装'; return 1; fi
+    for image in "$KERNEL_BOOT_DIR"/vmlinuz-*; do
+        [[ -f "$image" ]] || continue
+        verify_kernel_boot "${image##*/vmlinuz-}" || return 1
+    done
+}
+
+kernel_prepare_initramfs_boot() {
+    local backup override="$KERNEL_GRUB_DEFAULTS_DIR/zz-shellready-initramfs.cfg" temporary
+    kernel_initrdless_candidate || return 1
+    [[ -d "$KERNEL_GRUB_DEFAULTS_DIR" && ! -L "$KERNEL_GRUB_DEFAULTS_DIR" ]] || { fail 'GRUB 配置目录异常，停止准备'; return 1; }
+    [[ ! -e "$override" && ! -L "$override" ]] || { fail "已有引导配置，保留并停止：$override"; return 1; }
+    mkdir -p "$KERNEL_STATE" || return 1
+    backup=$(mktemp -d "$KERNEL_STATE/boot-preparation.XXXXXXXX") || return 1
+    cp -p "$KERNEL_BOOT_DIR/grub/grub.cfg" "$backup/grub.cfg" || return 1
+    log "检测到 Ubuntu 云镜像 initrdless 启动；准备原内核回退，GRUB 备份：$backup/grub.cfg"
+    if kernel_apply_initramfs_boot "$override"; then
+        log "已验证原内核的 initramfs 启动项；引导设置：$override"
+        return 0
+    fi
+    # Only remove our exact file. Never overwrite a concurrent/custom change.
+    if [[ -L "$override" ]] || { [[ -e "$override" ]] && ! cmp -s "$override" <(kernel_initramfs_override); }; then
+        fail "引导设置被其他操作修改，未自动恢复；请检查备份 $backup/grub.cfg，不要重启"; return 1
+    fi
+    rm -f -- "$override" || return 1
+    temporary=$(mktemp "$KERNEL_BOOT_DIR/grub/.shellready-restore.XXXXXXXX") || return 1
+    if ! cp -p "$backup/grub.cfg" "$temporary" || ! mv -- "$temporary" "$KERNEL_BOOT_DIR/grub/grub.cfg"; then
+        rm -f -- "$temporary"; fail "GRUB 恢复失败；备份位于 $backup/grub.cfg，不要重启"; return 1
+    fi
+    fail 'initramfs 引导准备失败，已恢复原 GRUB 配置，未安装新内核'; return 1
 }
 
 verify_or_repair_kernel_boot() {
@@ -79,12 +215,13 @@ kernel_preflight() {
         fail '容器共享宿主内核，不允许在容器安装内核'; return 1
     fi
     command -v update-grub >/dev/null 2>&1 || { fail '未检测到 update-grub，首版不支持此引导方式'; return 1; }
-    verify_or_repair_kernel_boot || return 1
-    local free_kb
-    free_kb=$(df -Pk "$KERNEL_BOOT_DIR" | awk 'END {print $4}')
-    if [[ ! "$free_kb" =~ ^[0-9]+$ ]] || ((free_kb < 1048576)); then
-        fail '/boot 所在分区至少需要 1 GiB 可用空间'; return 1
+    KERNEL_PREPARE_INITRDLESS=0
+    if kernel_initrdless_candidate; then
+        KERNEL_PREPARE_INITRDLESS=1
+    else
+        verify_or_repair_kernel_boot || return 1
     fi
+    kernel_check_boot_space || return 1
     if [[ -d /sys/firmware/efi ]]; then
         command -v mokutil >/dev/null 2>&1 || { fail 'UEFI 环境需要 mokutil 核验 Secure Boot 状态'; return 1; }
         LC_ALL=C mokutil --sb-state | grep -q 'SecureBoot disabled' || { fail '未确认 Secure Boot 关闭，不安装第三方内核'; return 1; }
@@ -112,6 +249,9 @@ install_kernel() {
     kernel=${pkg#linux-image-}
     [[ "$kernel" == "${TAG#*-}-joeyblog-bbrv3" ]] || { fail '包版本与指定 tag 不符'; return 1; }
     record="$KERNEL_STATE/$TAG"
+    if [[ -L "$record" || ( -e "$record" && ! -d "$record" ) ]]; then
+        fail '内核安装记录路径异常，停止安装'; return 1
+    fi
     if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -qx 'install ok installed'; then
         if [[ ! -d "$record" ]]; then
             log "内核包已存在：${pkg}；不接管此前由其他方式安装的内核。"
@@ -125,7 +265,16 @@ install_kernel() {
             [[ $(cat "$record/package") != "$pkg" || $(cat "$record/kernel") != "$kernel" || $(cat "$record/sha256") != "${digest#sha256:}" ]]; then
             fail '已有内核安装记录与发行包不符，拒绝覆盖'; return 1
         fi
+    fi
+    kernel_package_boot_budget "$deb" "$kernel"
+    if [[ "${KERNEL_PREPARE_INITRDLESS:-0}" == 1 ]]; then
+        kernel_prepare_initramfs_boot
     else
+        kernel_ensure_initramfs_tool
+    fi
+    # Generating recovery images may have consumed space since preflight.
+    kernel_check_boot_space "$KERNEL_REQUIRED_BOOT_KB"
+    if [[ ! -d "$record" ]]; then
         mkdir -p "$record"
         chmod 755 "$KERNEL_STATE" "$record"
         printf '%s\n' "$pkg" > "$record/package"
@@ -138,6 +287,7 @@ install_kernel() {
     if [[ "$already_installed" == 0 ]]; then
         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-remove "$deb"
     fi
+    kernel_generate_initramfs "$kernel" 262144
     update-grub || { fail '内核包已安装，但 GRUB 更新失败，请勿重启；修复原因后可重跑此命令'; return 1; }
     verify_kernel_boot "$(uname -r)" || return 1
     verify_kernel_boot "$kernel" || return 1

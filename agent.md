@@ -88,6 +88,7 @@ Zsh 是 zsh-autosuggestions 的依赖，应纳入依赖处理，不算额外的�
 - 总菜单 11「更新 ShellReady」对应独立 self-update，获取本项目 main 的完整固定 commit 快照，再 repair 已有组件；保留历史、停用状态，不补装已卸载工具，固定 --skip-bbr --keep-shell 并传递目标用户。下载不持有外层锁，由新版修复进程负责提权与加锁；成功/部分完成后退出旧菜单。旧 update/默认一键安装含义不变，旧 10 卸载编号不变。
 - 默认 BBR 不改现有 qdisc；不支持返回跳过，应用失败尝试恢复。
 - 可选内核来源为 byJoey/Actions-bbr-v3 标准 release；用户必须提供 tag 和 --yes，按 API SHA-256 校验 linux-image 包，不执行上游远程安装脚本。最低系统版本为 Ubuntu 24.04+、Debian 12+（包括 Ubuntu 26.04），仍要求可验证的 GRUB 回退环境。
+- 可选内核升级识别 Ubuntu 云镜像明确的 initrdless 模式：备份 GRUB，准备已有内核 initramfs，保留原云配置并新增项目管理的 initramfs 启动设置，验证后才安装新内核。生成工具按系统选择并使用 --no-remove，失败尝试恢复原 GRUB，不自动重启；未知引导损坏不自动处理。/boot 基础可用空间为 512 MiB，再按校验包的实际启动文件大小加 256 MiB 工作余量复查，不强制要求小分区必须空闲 1 GiB，不自动清理旧内核或扩容。该分支需真实云服务器验收，隔离测试不代表实际启动通过。
 - 普通卸载保留全机 BBR；--restore-bbr 显式恢复，发生后续修改冲突则停止。独立 kernel-remove 拒绝移除正在运行的内核。
 - tests/ 必须纳入版本控制；忽略测试目录会让 CI 在调用脚本时失败。Atuin 初始化显式关闭 AI 快捷键，保持本机历史搜索的默认范围；不限制用户自行调用其他 Atuin 功能。
 - 当前电脑无 Docker/Linux VM，不得声称 Linux 安装、SSH 传输、内核启动/回退已验证。
